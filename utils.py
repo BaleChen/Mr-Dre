@@ -109,3 +109,35 @@ def model_name(model: Any) -> str:
         return model
     return getattr(model, "__class__", type(model)).__name__
 
+
+def get_file_path(dir_name: str, model_name: str, round_num: int, mode: str, num_items: int = None, use_reviser: bool = False) -> str:
+    """
+    Generate the output file path for the current round.
+
+    The resulting path follows the pattern:
+        {dir_name}/{mode}/{model_name}/gen_turn{round_num}.jsonl
+
+    Notes:
+    - If round_num == 1, mode is forced to 'init'
+    - For checklist_feedback mode with num_items, directory is suffixed as {mode}_k={num_items}
+    - For refined modes, original mode rules apply
+    - If use_reviser is True, model folder becomes {model_name}_reviser
+    """
+    import os
+    
+    if round_num == 1:
+        mode = 'init'
+
+    # Handle refined modes
+    original_mode = mode
+    if mode.startswith('refined_'):
+        original_mode = mode[len('refined_'):]
+    
+    if num_items is not None and original_mode == 'checklist_feedback':
+        mode = f'{mode}_k={num_items}'
+
+    folder_model_name = f"{model_name}_reviser" if use_reviser else model_name
+    file_name = f"gen_turn{round_num}.jsonl"
+
+    return os.path.join(dir_name, mode, folder_model_name, file_name)
+
