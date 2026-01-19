@@ -6,8 +6,6 @@
     </a>
 </p>
 
----
-
 Official repository for the paper *"Beyond Single-shot Writing: Deep Research Agents are Unreliable at Multi-turn Report Revision"*.
 
 We introduce **Mr Dre**, a new evaluation suite for Deep Research Agents (DRAs) on *multi-turn report writing and revision*. Specifically, Mr-Dre includes:
@@ -92,6 +90,7 @@ Coming Soon... 👨‍💻
 - [x] Main engine and generation code
 - [x] Feedback simulation
 - [x] Datasets used in our paper
+- [ ] Shell scripts for easy generation/evaluation
 - [ ] Tongyi, DR Tulu, Open Deep Research server-side code
 - [ ] "How to Add a New DRA Engine" guide
 
