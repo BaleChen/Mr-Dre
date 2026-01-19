@@ -21,8 +21,8 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
-CHECKLIST_FEEDBACK_GPT_MODEL = "gpt-4.1-mini"
-FORMAL_FEEDBACK_GPT_MODEL = "gpt-4.1-mini"
+CONTENT_FEEDBACK_GPT_MODEL = "gpt-4.1-mini"
+FORMAT_FEEDBACK_GPT_MODEL = "gpt-4.1-mini"
 
 
 USER_SIMULATOR_SPROMPT = """
@@ -102,7 +102,7 @@ def generate_feedback_for_point(
     # Determine if the point should be covered based on weight
     should_be_covered = w >= 0
     
-    gpt = GPT(CHECKLIST_FEEDBACK_GPT_MODEL, system_prompt=USER_SIMULATOR_SPROMPT)
+    gpt = GPT(CONTENT_FEEDBACK_GPT_MODEL, system_prompt=USER_SIMULATOR_SPROMPT)
 
     feedback_prompt = f"""
 Original Query:
@@ -183,7 +183,7 @@ def generate_feedback_for_points(
         )
     points_block = "\n".join(lines)
 
-    gpt = GPT(CHECKLIST_FEEDBACK_GPT_MODEL, system_prompt=USER_SIMULATOR_SPROMPT_MULTI)
+    gpt = GPT(CONTENT_FEEDBACK_GPT_MODEL, system_prompt=USER_SIMULATOR_SPROMPT_MULTI)
 
     feedback_prompt = f"""
 Original Query:
@@ -298,7 +298,7 @@ def generate_feedback_batch(
     outputs: List[Dict[str, Any]] = []
     qid_list = sorted(set(str(q) for q in qids))
 
-    for qid_str in tqdm(qid_list, desc="Checklist feedback", unit="q"):
+    for qid_str in tqdm(qid_list, desc="Content feedback", unit="q"):
         eval_item = eval_map.get(qid_str)
         question_text = questions_by_id.get(qid_str)
 
@@ -356,8 +356,8 @@ def generate_feedback_batch(
 
     return outputs
 
-# Formal feedback examples for seed selection
-FORMAL_FEEDBACK_EXAMPLES = [
+# Format feedback examples for seed selection
+FORMAT_FEEDBACK_EXAMPLES = [
     "Please rewrite this so the language is clearer and more straightforward, suitable for a reader with no prior knowledge.",
     "Whenever you introduce a technical concept, add a simple and real-world analogy to illustrate it.",
     "Standardize heading levels and naming so similar sections use parallel phrasing (e.g., 'Approach', 'Results', 'Limitations').",
@@ -382,7 +382,7 @@ FORMAL_FEEDBACK_EXAMPLES = [
 ]
 
 # Combined system prompt for selecting and rewriting feedback
-FORMAL_FEEDBACK_SPROMPT = """
+FORMAT_FEEDBACK_SPROMPT = """
 You are a user providing feedback on the report's writing, structure, and presentation only, not on its facts, reasoning, or conclusions.
 
 You will be provided with:
@@ -403,19 +403,19 @@ Your final feedback must adhere to the following specific desiderata:
 Please only respond with the final rewritten feedback, without any additional explanation or commentary.
 """
 
-def generate_formal_feedback(original_query: str, report: str) -> str:
+def generate_format_feedback(original_query: str, report: str) -> str:
     """
-    Call GPT to generate a single piece of formal feedback for a report.
+    Call GPT to generate a single piece of format feedback for a report.
     
     Steps:
     1. Randomly select 3 feedback examples from the predefined list
     2. Ask GPT to select the most appropriate one and rewrite it to be more specific to the report in a single call
     """
     # Step 1: Randomly select 3 feedback examples
-    selected_examples = random.sample(FORMAL_FEEDBACK_EXAMPLES, 3)
+    selected_examples = random.sample(FORMAT_FEEDBACK_EXAMPLES, 3)
     
     # Step 2: Ask GPT to select and rewrite the feedback in a single call
-    gpt = GPT(FORMAL_FEEDBACK_GPT_MODEL, system_prompt=FORMAL_FEEDBACK_SPROMPT)
+    gpt = GPT(FORMAT_FEEDBACK_GPT_MODEL, system_prompt=FORMAT_FEEDBACK_SPROMPT)
     combined_prompt = f"""
 Original Query:
 {original_query}
@@ -436,13 +436,13 @@ Please first select the most appropriate feedback example and then rewrite it to
 
 
 
-def generate_formal_feedback_batch(
+def generate_format_feedback_batch(
     qids: List[str],
     reports_by_id: Dict[str, str],
     questions_by_id: Dict[str, str],
 ) -> List[Dict[str, Any]]:
     """
-    Generate formal feedback for a batch of question IDs, given the reports and original questions.
+    Generate format feedback for a batch of question IDs, given the reports and original questions.
 
     Args:
         qids: List of question IDs that require feedback.
@@ -453,7 +453,7 @@ def generate_formal_feedback_batch(
         A list of dictionaries, one per successfully generated feedback, each of the form:
             {
               "id": <question ID>,
-              "feedback": <generated formal feedback>,
+              "feedback": <generated format feedback>,
               "question": <original question text>,
               "item": [],
               "item_id": [],
@@ -462,7 +462,7 @@ def generate_formal_feedback_batch(
     outputs: List[Dict[str, Any]] = []
     qid_list = sorted(set(str(q) for q in qids))
 
-    for qid_str in tqdm(qid_list, desc="Formal feedback", unit="q"):
+    for qid_str in tqdm(qid_list, desc="Format feedback", unit="q"):
         report = reports_by_id.get(qid_str)
         question_text = questions_by_id.get(qid_str)
 
@@ -474,7 +474,7 @@ def generate_formal_feedback_batch(
             continue
 
         try:
-            feedback = generate_formal_feedback(question_text, report)
+            feedback = generate_format_feedback(question_text, report)
             outputs.append(
                 {
                     "id": qid_str,
@@ -485,7 +485,7 @@ def generate_formal_feedback_batch(
                 }
             )
         except Exception as e:
-            logger.warning(f"Q{qid_str} formal feedback failed: {e}")
+            logger.warning(f"Q{qid_str} format feedback failed: {e}")
             continue
 
     return outputs
