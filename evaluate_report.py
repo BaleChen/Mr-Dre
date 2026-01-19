@@ -7,8 +7,10 @@ import logging
 import random
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
-
+from dotenv import load_dotenv
 from tqdm import tqdm
+
+load_dotenv()
 
 logging.basicConfig(
     level=logging.INFO,

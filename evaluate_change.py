@@ -15,12 +15,14 @@ import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
-
+from dotenv import load_dotenv
 from tqdm import tqdm
 
 from dr_eval.eval_prompts import PAIRWISE_JUDGE_SYSTEM_PROMPT, PAIRWISE_JUDGE_USER_PROMPT
 from engine.oai import GPT
 from utils import load_jsonl
+
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
