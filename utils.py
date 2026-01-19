@@ -117,11 +117,16 @@ def get_file_path(dir_name: str, model_name: str, round_num: int, mode: str, num
     The resulting path follows the pattern:
         {dir_name}/{mode}/{model_name}/gen_turn{round_num}.jsonl
 
-    Notes:
-    - If round_num == 1, mode is forced to 'init'
-    - For checklist_feedback mode with num_items, directory is suffixed as {mode}_k={num_items}
-    - For refined modes, original mode rules apply
-    - If use_reviser is True, model folder becomes {model_name}_reviser
+    Args:
+        dir_name: Base directory for outputs
+        model_name: Name of the model
+        round_num: Current round number
+        mode: Round type (init, reflection, checklist_feedback, formal_feedback)
+        num_items: Number of checklist items (only for checklist_feedback)
+        use_reviser: Whether to use reviser agent
+
+    Returns:
+        Generated file path as string
     """
     import os
     
