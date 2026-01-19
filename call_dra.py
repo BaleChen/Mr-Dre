@@ -17,12 +17,9 @@ from feedback_refine import refine_feedback, load_feedback, load_gen_files
 
 load_dotenv()
 
-# # Timeout configuration (in seconds)
-# REQUEST_TIMEOUT_SECONDS = 30 * 60  # 30 minutes
-
-# # Batch processing configuration
-# POLL_INTERVAL_SECONDS = 10  # 10 seconds
-# BATCH_TIMEOUT_MINUTES = 300  # entire batch timeout 300 minutes
+REQUEST_TIMEOUT_SECONDS = int(os.getenv("REQUEST_TIMEOUT_SECONDS", "1800"))
+POLL_INTERVAL_SECONDS   = int(os.getenv("POLL_INTERVAL_SECONDS", "10"))
+BATCH_TIMEOUT_MINUTES   = int(os.getenv("BATCH_TIMEOUT_MINUTES", "300"))
 
 # Configure logging
 logging.basicConfig(
