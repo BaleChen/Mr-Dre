@@ -1,0 +1,16 @@
+[project]
+name = "mr-dre"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "diskcache==5.6.3",
+    "openai==2.15.0",
+    "python-dotenv==1.2.1",
+    "requests==2.32.5",
+    "tenacity==9.1.2",
+    "tqdm==4.67.1",
+    "typing-extensions==4.15.0",
+    "vllm>=0.13.0",
+]
