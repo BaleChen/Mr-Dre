@@ -39,7 +39,7 @@ def evaluate_rubric(
             }
         dataset_item: Dataset item (not used for rubrics, but kept for API consistency)
         judge_model: Model to use for rubric evaluation
-        rubric_dimensions: List of rubric dimensions to evaluate (default: ["organization"])
+        rubric_dimensions: List of rubric dimensions to evaluate (default: ["presentation"])
         **kwargs: Additional arguments
     
     Returns:
@@ -48,12 +48,12 @@ def evaluate_rubric(
             "id": int,
             "judge_model": str,
             "rubric_dims": List[str],
-            "organization": float,
-            "organization_details": List[Dict]
+            "presentation": float,
+            "presentation_details": List[Dict]
         }
     """
     if rubric_dimensions is None:
-        rubric_dimensions = ["organization"]
+        rubric_dimensions = ["presentation"]
     
     question = report_obj.get("question", "")
     report = report_obj.get("full_response", {}).get("report", "")

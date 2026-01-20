@@ -260,7 +260,7 @@ def evaluate_reports(
                     report,
                     dataset_item,
                     rubric_judge_model,
-                    rubric_dimensions=["organization"],
+                    rubric_dimensions=["presentation"],
                     **kwargs
                 )
                 existing_rubric_ids.add(question_id)
