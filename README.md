@@ -1,7 +1,7 @@
 # Mr Dre: Evaluation Suite for Deep Research Report Writing and Multi-turn Revision
 
 <p align="center">
-    <a href="https://arxiv.org/PLACEHOLDER" target="_blank" rel="noopener noreferrer">
+    <a href="https://www.arxiv.org/abs/2601.13217" target="_blank" rel="noopener noreferrer">
         <img alt="paper" src="https://img.shields.io/badge/paper-paper?logo=arxiv&logoColor=%23B31B1B&labelColor=white&color=%23B31B1B">
     </a>
 </p>
@@ -37,7 +37,6 @@ git clone https://github.com/BaleChen/mt-dra.git
 cd mt-dra
 
 # Set up the environment
-# WIP: coming soon...👨‍💻
 uv sync
 ```
 
@@ -103,7 +102,15 @@ If you have any questions, feel free to email me at `bale[dot]chen[at]nyu[dot]ed
 If you find our work useful, please cite us:
 
 ```bibtex
-PLACEHOLDER
+@misc{chen2026singleshotwritingdeepresearch,
+      title={Beyond Single-shot Writing: Deep Research Agents are Unreliable at Multi-turn Report Revision}, 
+      author={Bingsen Chen and Boyan Li and Ping Nie and Yuyu Zhang and Xi Ye and Chen Zhao},
+      year={2026},
+      eprint={2601.13217},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL},
+      url={https://arxiv.org/abs/2601.13217}, 
+}
 ```
 
 <details>
