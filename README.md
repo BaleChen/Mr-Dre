@@ -85,9 +85,9 @@ To bring your own dataset, ensure the questions have annotated *question-specifi
 Use `generate_report.sh` to generate reports with the Deep Research Agent (DRA). This script supports multi-turn report generation with different feedback types.
 
 ### Notes
-- `init` type corresponds to turn 1
-- Turn 2+ generations require all previous turns to exist
-- `content_feedback` mode for turn x requires evaluating turn x-1 generation first
+- The first turn is always generated with type `init`.
+- Generating turn *n* requires that turns 1 to *n-1* have already been generated.
+- Before applying `content_feedback` type to turn *n*, the model output for turn *n-1* must be evaluated.
 
 ### Basic Usage
 
