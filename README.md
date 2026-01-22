@@ -105,7 +105,7 @@ The `evaluate_report.sh` script accepts the following parameters:
 - `<type>`: Turn type (`init`, `reflection`, `content_feedback`, `format_feedback`) [default: init]
 ## DRA Report Evaluation
 
-Use `evaluate_report.py` to evaluate generated reports. Supports three evaluation modes: checklist, citation, and rubric.
+Use `evaluate_report.sh` to evaluate generated reports. Supports three evaluation modes: checklist, citation, and rubric.
 
 ### Basic Usage
 
