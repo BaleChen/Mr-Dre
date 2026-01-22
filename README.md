@@ -38,7 +38,11 @@ cd mt-dra
 
 # Set up the environment
 uv sync
+
+# Activate the virtual environment
+source .venv/bin/activate
 ```
+
 
 Then, set your API keys as environment variables by defining them in `.env`. You can use our provided `.env.example` as a reference. We require four API Keys: `OPENAI_API_KEY`, `PERPLEXITY_API_KEY`, `JINA_API_KEY`, and `SERPER_API_KEY`.
 
@@ -77,19 +81,55 @@ These JSONL files are preprocessed into a standardized format compatible with th
 To bring your own dataset, ensure the questions have annotated *question-specific checklists* for report comprehensiveness evaluation. Process your dataset into a JSONL file following the format above and name it `YOUR_DATASET_NAME.jsonl`.
 
 ## DRA Report Generation
-Coming Soon... 👨‍💻
 
+Use `generate_report.sh` to generate reports with the Deep Research Agent (DRA). This script supports multi-turn report generation with different feedback types.
+
+### Notes
+- `init` type corresponds to turn 1
+- Turn 2+ generations require all previous turns to exist
+- `content_feedback` mode for turn x requires evaluating turn x-1 generation first
+
+### Basic Usage
+
+Use the provided shell script for easier execution:
+
+```bash
+./scripts/generate_report.sh <dataset> <model> <turn> <type>
+```
+
+### Key Parameters
+The `evaluate_report.sh` script accepts the following parameters:
+- `<dataset>`: Dataset name (`ResearcherBench`, `RigorousBench`, `ResearchRubrics`) [required]
+- `<model>`: Model name (`dr-tulu`, `o4-mini-deep-research`, `o4-gpt4.1`, `sonar-deep-research`, `tongyi-deep-research`) [required]
+- `<turn>`: Turn number (starting from 1) [default: 1]
+- `<type>`: Turn type (`init`, `reflection`, `content_feedback`, `format_feedback`) [default: init]
 ## DRA Report Evaluation
-Coming Soon... 👨‍💻
+
+Use `evaluate_report.py` to evaluate generated reports. Supports three evaluation modes: checklist, citation, and rubric.
+
+### Basic Usage
+
+Use the provided shell script for easier execution:
+
+```bash
+./scripts/evaluate_report.sh <report_file> <dataset_file>
+```
+
+### Key Parameters
+The `evaluate_report.sh` script accepts the following parameters:
+- `<report_file>`: Path to generated report JSONL file [required]
+- `<dataset_file>`: Path to dataset JSONL file [required]
+- `<eval_mode>`: Evaluation mode (`all`, `checklist`, `citation`, `rubric`) [default: all]
+- `<num_questions>`: Number of questions to evaluate (-1 for all) [default: -1]
 
 ## Release Progress
 
 - [x] Main evaluation protocol
-- [ ] Setup quickstart
+- [x] Setup quickstart
 - [x] Main engine and generation code
 - [x] Feedback simulation
 - [x] Datasets used in our paper
-- [ ] Shell scripts for easy generation/evaluation
+- [x] Shell scripts for easy generation/evaluation
 - [ ] Tongyi, DR Tulu, Open Deep Research server-side code
 - [ ] "How to Add a New DRA Engine" guide
 
