@@ -6,12 +6,15 @@
     </a>
 </p>
 
-Official repository for the paper *"Beyond Single-shot Writing: Deep Research Agents are Unreliable at Multi-turn Report Revision"*.
+Official repository for the paper [*"Beyond Single-shot Writing: Deep Research Agents are Unreliable at Multi-turn Report Revision"*](https://www.arxiv.org/abs/2601.13217).
+
 
 We introduce **Mr Dre**, a new evaluation suite for Deep Research Agents (DRAs) on *multi-turn report writing and revision*. Specifically, Mr-Dre includes:
 
 1. **A Unified Evaluation Protocol for Deep Research Reports:** We consolidated best practices from previous Deep Research evaluation works into a lean protocol spanning three dimensions: *Comprehensiveness*, *Factuality*, and *Presentation*.
 2. **Feedback Simulation Pipeline for Multi-turn Report Revision:** To evaluate not only the single-shot writing capabilities of Deep Research Agents but also their multi-turn report revision ability, we introduce a reliable method to simulate content, format, and self-reflection feedback.
+
+<img src="assets/mrdre_overview.png" alt="Overview of Mr Dre">
 
 ## Table of Contents
 
@@ -82,12 +85,12 @@ To bring your own dataset, ensure the questions have annotated *question-specifi
 
 ## DRA Report Generation
 
-Use `generate_report.sh` to generate reports with the Deep Research Agent (DRA). This script supports multi-turn report generation with different feedback types.
+Use `generate_report.sh` to generate reports with supported DRAs. This script supports multi-turn report generation or revision with different feedback types.
 
 ### Notes
 - The first turn is always generated with type `init`.
 - Generating turn *n* requires that turns 1 to *n-1* have already been generated.
-- Before applying `content_feedback` type to turn *n*, the model output for turn *n-1* must be evaluated.
+- Before applying `content_feedback` type to turn *n*, the model output for turn *n-1* must be evaluated (at least the checklist mode evaluation is done, since feedback generation relies on failed checklist criteria).
 
 ### Basic Usage
 
@@ -103,24 +106,27 @@ The `evaluate_report.sh` script accepts the following parameters:
 - `<model>`: Model name (`dr-tulu`, `o4-mini-deep-research`, `o4-gpt4.1`, `sonar-deep-research`, `tongyi-deep-research`) [required]
 - `<turn>`: Turn number (starting from 1) [default: 1]
 - `<type>`: Turn type (`init`, `reflection`, `content_feedback`, `format_feedback`) [default: init]
+
 ## DRA Report Evaluation
 
-Use `evaluate_report.sh` to evaluate generated reports. Supports three evaluation modes: checklist, citation, and rubric.
+Use `evaluate_report.sh` to evaluate generated Deep Research reports. It supports three evaluation modes: checklist, citation, and rubric. Note that the three modes correspond to our three evaluation dimentions defined in our paper: Comprehensiveness is measured by *checklist* coverage; Factuality uses *citation*-based metrics (citation faithfulness and claim groundedness); Presentation score relies on a fixed set of *rubrics* to evaluate.
 
 ### Basic Usage
 
 Use the provided shell script for easier execution:
 
 ```bash
-./scripts/evaluate_report.sh <report_file> <dataset_file>
+./scripts/evaluate_report.sh <report_file> <dataset_file> (<eval_mode> <num_questions>)
 ```
 
 ### Key Parameters
 The `evaluate_report.sh` script accepts the following parameters:
 - `<report_file>`: Path to generated report JSONL file [required]
 - `<dataset_file>`: Path to dataset JSONL file [required]
-- `<eval_mode>`: Evaluation mode (`all`, `checklist`, `citation`, `rubric`) [default: all]
-- `<num_questions>`: Number of questions to evaluate (-1 for all) [default: -1]
+- `<eval_mode>`: Optional. Evaluation mode (`all`, `checklist`, `citation`, `rubric`) [default: all]
+- `<num_questions>`: Optional. Number of questions to evaluate (-1 for all) [default: -1]
+
+Incorporation rate and break rate evalution guide incoming...🧑‍💻
 
 ## Release Progress
 
@@ -130,6 +136,7 @@ The `evaluate_report.sh` script accepts the following parameters:
 - [x] Feedback simulation
 - [x] Datasets used in our paper
 - [x] Shell scripts for easy generation/evaluation
+- [ ] "How to Evaluate External DR Reports?" guide
 - [ ] Tongyi, DR Tulu, Open Deep Research server-side code
 - [ ] "How to Add a New DRA Engine" guide
 
