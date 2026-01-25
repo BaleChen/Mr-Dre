@@ -9,7 +9,7 @@
 Official repository for the paper [*"Beyond Single-shot Writing: Deep Research Agents are Unreliable at Multi-turn Report Revision"*](https://www.arxiv.org/abs/2601.13217).
 
 
-We introduce **Mr Dre**, a new evaluation suite for Deep Research Agents (DRAs) on *multi-turn report writing and revision*. Specifically, Mr-Dre includes:
+Human researchers rarely write a report in a single shot, as we iteratively draft and revise from peer feedback or self-reflection. Can Deep Research Agents also reliably revise their reports in response to user feedback? We introduce **Mr Dre**, a new evaluation suite for Deep Research Agents (DRAs) on *multi-turn report writing and revision*. Specifically, Mr Dre includes:
 
 1. **A Unified Evaluation Protocol for Deep Research Reports:** We consolidated best practices from previous Deep Research evaluation works into a lean protocol spanning three dimensions: *Comprehensiveness*, *Factuality*, and *Presentation*.
 2. **Feedback Simulation Pipeline for Multi-turn Report Revision:** To evaluate not only the single-shot writing capabilities of Deep Research Agents but also their multi-turn report revision ability, we introduce a reliable method to simulate content, format, and self-reflection feedback.
@@ -28,7 +28,7 @@ We introduce **Mr Dre**, a new evaluation suite for Deep Research Agents (DRAs) 
 - [Citation](#citation)
 
 ## News
-[01/20/2025] Initial Code Release🎉
+[01/20/2026] Initial Code Release🎉
 
 ## Setup
 
