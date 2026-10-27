@@ -40,12 +40,16 @@ GPT_MODEL = "gpt-4.1-mini"
 
 
 def parse_run(gen_file: str) -> Tuple[Path, Path, int]:
+    """
+    Resolve a generation file into (file path, directory holding its metrics, turn index).
+    Metrics are expected next to the generation file, which is where evaluate_report.py writes them by default.
+    """
     path = Path(gen_file).expanduser().resolve()
-    turn = int(GEN_FILE_PATTERN.search(path.name).group(1))
-    parts = list(path.parts)
-    out_idx = parts.index("output")
-    run_dir = Path(*parts[: out_idx + 4])
-    return path, run_dir, turn
+    match = GEN_FILE_PATTERN.search(path.name)
+    if match is None:
+        raise ValueError(f"Generation file must be named 'gen_turn{{i}}.jsonl'. Got: {path.name}")
+    turn = int(match.group(1))
+    return path, path.parent, turn
 
 
 def load_metrics(run_dir: Path, turn: int, filename: str) -> List[Dict]:
@@ -172,15 +176,19 @@ def citation_stats(cite_v1: List[Dict], cite_v2: List[Dict]) -> Tuple[float, flo
 
 def rubric_stats(rub_v1: List[Dict], rub_v2: List[Dict]) -> float:
     pairs = align_by_id(rub_v1, rub_v2)
-    deltas = [m2["organization"] - m1["organization"] for m1, m2 in pairs if "organization" in m1 and "organization" in m2]
+    deltas = [m2["presentation"] - m1["presentation"] for m1, m2 in pairs if "presentation" in m1 and "presentation" in m2]
     return sum(deltas) / len(deltas) if deltas else 0.0
 
 
-def judge_incorporation_rate(gen_reports_v1: List[Dict], gen_reports_v2: List[Dict]) -> Tuple[float, List[Dict]]:
+def judge_incorporation_rate(
+    gen_reports_v1: List[Dict],
+    gen_reports_v2: List[Dict],
+    judge_model_name: str = GPT_MODEL,
+) -> Tuple[float, List[Dict]]:
     pairs = align_by_id(gen_reports_v1, gen_reports_v2)
     if not pairs:
         return 0.0, []
-    judge_model = GPT(GPT_MODEL, system_prompt=PAIRWISE_JUDGE_SYSTEM_PROMPT)
+    judge_model = GPT(judge_model_name, system_prompt=PAIRWISE_JUDGE_SYSTEM_PROMPT)
     scores: List[Optional[float]] = [None] * len(pairs)
     detailed_results: List[Dict] = []
 
@@ -232,18 +240,32 @@ def judge_incorporation_rate(gen_reports_v1: List[Dict], gen_reports_v2: List[Di
     average_score = sum(valid_scores) / len(valid_scores) if valid_scores else 0.0
     return average_score, detailed_results
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Compare two generation runs.")
-    parser.add_argument("gen_file_v1", type=str, help="Generation file for version 1")
-    parser.add_argument("gen_file_v2", type=str, help="Generation file for version 2")
-    parser.add_argument("--formal-change", default=False, action="store_true",
-                        help="Whether to compute the eval metrics for formal feedback.")
-    parser.add_argument("--output-file", type=str, default="incorporation_results.jsonl",
-                        help="Output file to save detailed scores")
-    args = parser.parse_args()
+def compute_change_metrics(
+    gen_file_v1: str,
+    gen_file_v2: str,
+    formal_change: bool = False,
+    judge_model_name: str = GPT_MODEL,
+    output_file: Optional[str] = None,
+) -> Dict[str, float]:
+    """
+    Compute the multi-turn revision metrics between two evaluated generation files.
 
-    gen_v1, run_v1, turn_v1 = parse_run(args.gen_file_v1)
-    gen_v2, run_v2, turn_v2 = parse_run(args.gen_file_v2)
+    Both files must already be evaluated with evaluate_report.py, so that their checklist,
+    citation, and rubric metrics sit next to them as {mode}_turn{i}.jsonl.
+
+    Args:
+        gen_file_v1: Generation file of the earlier turn (gen_turn{i}.jsonl)
+        gen_file_v2: Generation file of the later turn (gen_turn{j}.jsonl)
+        formal_change: If True, the incorporation rate is judged pairwise by an LLM (format feedback);
+                       otherwise it is the fix rate of the targeted checklist items (content feedback).
+        judge_model_name: Model for the pairwise incorporation judge (format feedback only)
+        output_file: Optional path to save the per-question incorporation judgments
+
+    Returns:
+        Dict mapping each name in COLUMNS to its value
+    """
+    gen_v1, run_v1, turn_v1 = parse_run(gen_file_v1)
+    gen_v2, run_v2, turn_v2 = parse_run(gen_file_v2)
 
     gen_reports_v1 = load_jsonl(str(gen_v1))
     gen_reports_v2 = load_jsonl(str(gen_v2))
@@ -263,11 +285,13 @@ def main() -> None:
 
     # Compute incorporation rate: fix_rate for checklist feedback, judge for formal feedback
     # (they don't happen together, so we merge them into one metric)
-    if args.formal_change:
-        incorporation_rate, detailed_results = judge_incorporation_rate(gen_reports_v1, gen_reports_v2)
+    if formal_change:
+        incorporation_rate, detailed_results = judge_incorporation_rate(
+            gen_reports_v1, gen_reports_v2, judge_model_name
+        )
 
-        if detailed_results:
-            output_path = Path(args.output_file)
+        if detailed_results and output_file:
+            output_path = Path(output_file)
             output_path.parent.mkdir(parents=True, exist_ok=True)
             with open(output_path, 'w', encoding='utf-8') as f:
                 for result in detailed_results:
@@ -284,10 +308,32 @@ def main() -> None:
         ground_delta,
         presentation_delta,
     ]
+    return dict(zip(COLUMNS, values))
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Compare two generation runs.")
+    parser.add_argument("gen_file_v1", type=str, help="Generation file for version 1")
+    parser.add_argument("gen_file_v2", type=str, help="Generation file for version 2")
+    parser.add_argument("--formal-change", default=False, action="store_true",
+                        help="Whether to compute the eval metrics for formal feedback.")
+    parser.add_argument("--output-file", type=str, default="incorporation_results.jsonl",
+                        help="Output file to save detailed scores")
+    parser.add_argument("--judge-model", type=str, default=GPT_MODEL,
+                        help="Model for the pairwise incorporation judge (formal feedback only)")
+    args = parser.parse_args()
+
+    metrics = compute_change_metrics(
+        args.gen_file_v1,
+        args.gen_file_v2,
+        formal_change=args.formal_change,
+        judge_model_name=args.judge_model,
+        output_file=args.output_file,
+    )
 
     writer = csv.writer(sys.stdout)
     writer.writerow(COLUMNS)
-    writer.writerow([f"{val:.4f}" for val in values])
+    writer.writerow([f"{metrics[col]:.4f}" for col in COLUMNS])
 
 
 if __name__ == "__main__":

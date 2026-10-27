@@ -5,8 +5,10 @@ Provides a unified interface and router for different deep research agent implem
 """
 
 import importlib
+import uuid
 from abc import ABC, abstractmethod
-from typing import Any, List, Optional, Tuple, Union
+from concurrent.futures import Future, ThreadPoolExecutor
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 
 class DeepResearchAgentBase(ABC):
@@ -97,14 +99,89 @@ class DeepResearchAgentBase(ABC):
         return response
 
 
+class SimpleDeepResearchAgent(DeepResearchAgentBase):
+    """
+    Base class for plugging in a DRA that runs synchronously (e.g., a local agent loop
+    or a blocking HTTP endpoint). Subclasses implement only `generate`; this class runs
+    each request in a thread pool and provides the asynchronous interface that
+    call_dra.py expects (`__call__`, `poll`, `wait_for_completion`, `get_response`).
+
+    Example:
+        >>> class MyAgent(SimpleDeepResearchAgent):
+        ...     def generate(self, messages):
+        ...         report = my_agent.run(messages)  # your own agent
+        ...         return {"report": report}
+    """
+
+    def __init__(self, model: str, max_workers: int = 10, **kwargs):
+        """
+        Args:
+            model: Model name/identifier (the name passed to --model).
+            max_workers: Maximum number of requests generated concurrently.
+            **kwargs: Ignored; accepted for compatibility with the DRA router.
+        """
+        self.model = model
+        self._executor = ThreadPoolExecutor(max_workers=max_workers)
+        self._futures: Dict[str, Future] = {}
+
+    @abstractmethod
+    def generate(self, messages: List[dict]) -> Union[str, dict]:
+        """
+        Produce a report for a conversation.
+
+        Args:
+            messages: OpenAI-style messages. The first is the user question; in later turns
+                the list alternates previous reports (assistant) and feedback (user),
+                ending with the current feedback.
+
+        Returns:
+            The report text, or a dict with at least a "report" key. Cited sources should
+            appear in the report as URLs (inline links or a references section), since the
+            citation evaluation extracts them from the report text.
+        """
+        pass
+
+    def __call__(self, input_data: Union[str, List[dict]], **kwargs) -> str:
+        messages = [{"role": "user", "content": input_data}] if isinstance(input_data, str) else input_data
+        request_id = str(uuid.uuid4())
+        self._futures[request_id] = self._executor.submit(self.generate, messages)
+        return request_id
+
+    def poll(self, request_id: str) -> Tuple[bool, Optional[dict]]:
+        future = self._futures[request_id]
+        if not future.done():
+            return False, None
+        # Re-raises any exception from generate(), which call_dra.py records as a failure
+        result = self._postprocess_response(future.result())
+        del self._futures[request_id]
+        return True, result
+
+    def wait_for_completion(self, request_id: str) -> dict:
+        self._futures[request_id].result()
+        return self.poll(request_id)[1]
+
+    def get_response(self, request_id: str) -> Tuple[str, Any]:
+        future = self._futures[request_id]
+        if not future.done():
+            return "in_progress", None
+        return ("failed", future.exception()) if future.exception() else ("completed", future.result())
+
+    def _postprocess_response(self, response: Union[str, dict]) -> dict:
+        if isinstance(response, str):
+            return {"report": response}
+        if "report" not in response:
+            raise ValueError("generate() must return the report text or a dict with a 'report' key")
+        return response
+
+
 # Provider registry: maps model prefix/pattern to (module_name, class_name, case_sensitive)
 _PROVIDER_REGISTRY: List[Tuple[str, str, str, bool]] = [
     ("sonar-", "perplexity", "SonarDeepResearchAgent", True),
     ("odr-", "odr", "OpenDeepResearchAgent", True),
     ("dr-tulu", "dr_tulu", "DrTuluDeepResearchAgent", True),
     ("tongyi", "tongyi", "TongyiDeepResearchAgent", True),
-    # Add new providers here:
-    # ("my-provider-", "my_module", "MyProviderAgent", True),
+    # Add new providers here (see docs/evaluate_your_dra.md and engine/template.py):
+    # ("my-dra", "template", "MyDeepResearchAgent", True),
 ]
 
 # OpenAI models require exact matching
@@ -191,5 +268,5 @@ class DRA:
 # TODO: add back when releasing reviser agent
 # from .reviser_agent import ReviserAgent
 
-__all__ = ["DRA", "DeepResearchAgentBase"] # "ReviserAgent" TODO: add back when releasing reviser agent
+__all__ = ["DRA", "DeepResearchAgentBase", "SimpleDeepResearchAgent"] # "ReviserAgent" TODO: add back when releasing reviser agent
 

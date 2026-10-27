@@ -24,6 +24,12 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 CONTENT_FEEDBACK_GPT_MODEL = "gpt-4.1-mini"
 FORMAT_FEEDBACK_GPT_MODEL = "gpt-4.1-mini"
 
+# Fixed user turn for self-reflection revision
+REFLECTION_FEEDBACK = (
+    "Reflect on your current report and refine it. "
+    "Please only return the refined report without any other text."
+)
+
 
 USER_SIMULATOR_SPROMPT = """
 You are a user providing feedback to a research report writing agent.

@@ -1,7 +1,7 @@
 [project]
 name = "mr-dre"
 version = "0.1.0"
-description = "Add your description here"
+description = "Evaluation suite for deep research report writing and multi-turn revision"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -12,5 +12,10 @@ dependencies = [
     "tenacity==9.1.2",
     "tqdm==4.67.1",
     "typing-extensions==4.15.0",
+]
+
+[project.optional-dependencies]
+# Only needed to serve open-weight DRAs locally; evaluation does not use it.
+serve = [
     "vllm>=0.13.0",
 ]

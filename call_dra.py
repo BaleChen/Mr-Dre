@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 from utils import load_jsonl, save_jsonl, append_jsonl, get_file_path
 from engine import DRA
 from engine.reviser_agent import ReviserAgent
-from feedback import generate_feedback_batch, generate_format_feedback_batch
+from feedback import generate_feedback_batch, generate_format_feedback_batch, REFLECTION_FEEDBACK
 from feedback_refine import refine_feedback, load_feedback, load_gen_files
 
 load_dotenv()
@@ -209,7 +209,7 @@ def get_feedbacks(
 
         reports_by_id: Dict[str, str] = {}
         try:
-            report_data = load_file(report_file)
+            report_data = load_jsonl(report_file)
             for item in report_data:
                 qid = item.get("id")
                 if qid is None:
@@ -498,10 +498,7 @@ def construct_conversations(
     # 3. Append the current turn signal, determined by current_turn_type
     if current_turn_type == "reflection":
         for qid, conv in conversations.items():
-            feedback_text = (
-                "Reflect on your current report and refine it. "
-                "Please only return the refined report without any other text."
-            )
+            feedback_text = REFLECTION_FEEDBACK
             signal = {
                 "feedback_text": feedback_text,
                 "targeted_item": [],

@@ -35,7 +35,10 @@ from dr_eval.eval_prompts import (
     SUPPORTED_JUDGE_SYSTEM_PROMPT,
 )
 from engine.oai import GPT
-from utils import load_jsonl, load_dataset, append_jsonl
+from utils import load_jsonl, save_jsonl, load_dataset, append_jsonl, resolve_dataset_path
+
+DEFAULT_JUDGE_MODEL = "gpt-4.1-mini"
+DEFAULT_SUMMARIZATION_MODEL = "gpt-4.1-nano"
 
 
 def _load_existing_metrics(metrics_path: Path, ignore_existing: bool) -> Tuple[int, Set[int], List[Dict[str, Any]]]:
@@ -56,27 +59,63 @@ def _load_existing_metrics(metrics_path: Path, ignore_existing: bool) -> Tuple[i
     return 0, set(), []
 
 
+def _upsert_agg_entry(agg_metrics_file: Path, entry: Dict[str, Any]) -> None:
+    """
+    Write a dataset-level aggregate entry, replacing any earlier entry for the same eval_type
+    so that re-running an evaluation does not leave stale duplicates behind.
+    """
+    entries = load_jsonl(str(agg_metrics_file)) if agg_metrics_file.exists() else []
+    entries = [e for e in entries if e.get("eval_type") != entry["eval_type"]]
+    entries.append(entry)
+    save_jsonl(entries, str(agg_metrics_file))
+
+
+def _postprocess_dr_tulu(reports: List[Dict[str, Any]]) -> None:
+    """
+    DR Tulu reports cite snippet IDs instead of URLs, so the citations are resolved
+    through the snippet map before evaluation. Reports without a snippet map are left untouched.
+    """
+    if not any((r.get("full_response") or {}).get("snippet_map") for r in reports):
+        return
+    try:
+        from engine.dr_tulu import parse_and_format_citations
+    except ImportError:
+        logger.warning(
+            "Reports carry a DR Tulu snippet_map, but engine/dr_tulu.py is not available; "
+            "citations are evaluated as they appear in the report text."
+        )
+        return
+
+    for report in tqdm(reports, desc="DR Tulu pre-eval processing"):
+        full_response = report["full_response"]
+        if full_response.get("snippet_map"):
+            full_response["report"] = parse_and_format_citations(
+                full_response["report"], full_response["snippet_map"]
+            )
+
+
 def evaluate_reports(
     report_file: str,
     dataset_file: str,
-    output_dir: str,
+    output_dir: str = None,
     eval_mode: str = "all",
-    evaluator_model_name: str = None,
-    claim_extraction_model_name: str = None,
-    supported_judge_model_name: str = None,
-    webpage_summarization_model_name: str = None,
-    rubric_judge_model_name: str = None,
+    evaluator_model_name: str = DEFAULT_JUDGE_MODEL,
+    claim_extraction_model_name: str = DEFAULT_JUDGE_MODEL,
+    supported_judge_model_name: str = DEFAULT_JUDGE_MODEL,
+    webpage_summarization_model_name: str = DEFAULT_SUMMARIZATION_MODEL,
+    rubric_judge_model_name: str = DEFAULT_JUDGE_MODEL,
     ignore_existing: bool = False,
     num_questions: int = -1,
+    turn: Optional[int] = None,
     **kwargs
-):
+) -> Dict[str, Dict[str, Any]]:
     """
     Evaluate generated reports.
 
     Args:
         report_file: Path to generated report JSONL file
-        dataset_file: Path to dataset JSONL file
-        output_dir: Directory to save evaluation results
+        dataset_file: Dataset name (e.g., "ResearcherBench") or path to a dataset JSONL file
+        output_dir: Directory to save evaluation results (defaults to the report file's directory)
         eval_mode: Evaluation mode - "checklist", "citation", "rubric", or "all"
         evaluator_model_name: Model for checklist evaluation
         claim_extraction_model_name: Model for claim extraction
@@ -86,14 +125,26 @@ def evaluate_reports(
         ignore_existing: If True, re-evaluate all reports even when prior metrics exist
         num_questions: Number of questions to evaluate (default: -1 for all).
                        Uses the same seed (42) as call_dra.py to select the same subset.
+        turn: Turn index of the reports. If None, it is parsed from the "turn{i}" suffix of the filename.
         **kwargs: Additional arguments passed to evaluation functions
+
+    Returns:
+        Dict mapping each evaluated mode to {"aggregate": Dict, "num_evaluated": int, "failed_ids": List}
     """
     logger.info(f"Evaluating {Path(report_file).name} ({eval_mode} mode)")
 
     # Load data
+    dataset_file = resolve_dataset_path(dataset_file)
     reports = load_jsonl(report_file)
     dataset = load_dataset(dataset_file)
     logger.info(f"Loaded {len(reports)} reports, {len(dataset)} dataset items")
+
+    unknown_ids = [r.get("id") for r in reports if r.get("id") not in dataset]
+    if unknown_ids:
+        raise ValueError(
+            f"{len(unknown_ids)} report IDs are not in {dataset_file} (e.g., {unknown_ids[:5]}). "
+            "Report IDs must match the dataset IDs, including their type (int vs. str)."
+        )
 
     # Filter to sampled subset if num_questions is specified
     # Uses the same logic as call_dra.py to ensure the same subset is selected
@@ -128,14 +179,15 @@ def evaluate_reports(
         output_path = report_path.parent
 
     # Extract turn from filename pattern *_turn{i}
-    if "turn" in report_filename:
-        turn_suffix = report_filename.split("turn")[-1]
-        if turn_suffix.isdigit():
-            turn = int(turn_suffix)
+    if turn is None:
+        if "turn" in report_filename:
+            turn_suffix = report_filename.split("turn")[-1]
+            if turn_suffix.isdigit():
+                turn = int(turn_suffix)
+            else:
+                raise ValueError(f"Invalid turn suffix: {turn_suffix}. Please check the report filename format.")
         else:
-            raise ValueError(f"Invalid turn suffix: {turn_suffix}. Please check the report filename format.")
-    else:
-        raise ValueError(f"Report filename must contain 'turn{{i}}' pattern (e.g., 'gen_turn1.jsonl'). Got: {report_filename}")
+            raise ValueError(f"Report filename must contain 'turn{{i}}' pattern (e.g., 'gen_turn1.jsonl'), or pass the turn explicitly. Got: {report_filename}")
 
     agg_metrics_file = output_path / f"agg_metrics_turn{turn}.jsonl"
     logger.info(f"Output: {output_path} (turn {turn})")
@@ -144,164 +196,120 @@ def evaluate_reports(
     if ignore_existing:
         logger.info("Re-evaluating all reports (ignore_existing=True)")
 
-    # DR Tulu specific postprocessing 
-    if "dr-tulu" in report_file:
-        from engine.dr_tulu import parse_and_format_citations
-        
-        for report in tqdm(reports, desc="DR Tulu pre-eval processing"):
-            report_text = report["full_response"]["report"]
-            snippet_map = report["full_response"]["snippet_map"]
+    # DR Tulu specific postprocessing
+    _postprocess_dr_tulu(reports)
 
-            new_report_text = parse_and_format_citations(report_text, snippet_map)
-            report["full_response"]["report"] = new_report_text
+    # Each mode: (judge models, per-report evaluation function, aggregation function)
+    modes = {
+        "checklist": (
+            lambda: {"evaluator_model": GPT(evaluator_model_name, system_prompt=CHECKLIST_EVAL_SYSTEM_PROMPT)},
+            lambda report, models: evaluate_checklist(
+                report, dataset[report.get("id")], models["evaluator_model"], **kwargs
+            ),
+            aggregate_checklist_metrics,
+        ),
+        "citation": (
+            lambda: {
+                "claim_extraction_model": GPT(claim_extraction_model_name, system_prompt=CLAIM_EXTRACTION_SYSTEM_PROMPT),
+                "supported_judge_model": GPT(supported_judge_model_name, system_prompt=SUPPORTED_JUDGE_SYSTEM_PROMPT),
+                "webpage_summarization_model": GPT(webpage_summarization_model_name, system_prompt=CONTENT_SUMMARIZATION_SYSTEM_PROMPT),
+            },
+            lambda report, models: evaluate_citations(
+                report,
+                models["claim_extraction_model"],
+                models["supported_judge_model"],
+                webpage_summarization_model=models["webpage_summarization_model"],
+                **kwargs
+            ),
+            aggregate_citation_metrics,
+        ),
+        "rubric": (
+            lambda: {"rubric_judge_model": GPT(rubric_judge_model_name, system_prompt=RUBRIC_EVAL_SYSTEM_PROMPT)},
+            lambda report, models: evaluate_rubric(
+                report, dataset.get(report.get("id"), {}), models["rubric_judge_model"],
+                rubric_dimensions=["presentation"], **kwargs
+            ),
+            aggregate_rubric_metrics,
+        ),
+    }
 
-    if eval_mode in ["checklist", "all"]:
-        checklist_output = output_path / f"checklist_turn{turn}.jsonl"
-        _, existing_checklist_ids, existing_checklist_records = _load_existing_metrics(checklist_output, ignore_existing)
+    summary: Dict[str, Dict[str, Any]] = {}
+    for mode, (build_models, evaluate_one, aggregate) in modes.items():
+        if eval_mode not in (mode, "all"):
+            continue
+
+        mode_output = output_path / f"{mode}_turn{turn}.jsonl"
+        _, existing_ids, existing_records = _load_existing_metrics(mode_output, ignore_existing)
+        if ignore_existing and mode_output.exists():
+            # Start the per-report file afresh so that stale records are not mixed with new ones
+            mode_output.unlink()
         # Filter existing records to sampled subset if num_questions is specified
         if sampled_ids is not None:
-            existing_checklist_records = [r for r in existing_checklist_records if r.get("id") in sampled_ids]
-            existing_checklist_ids = {r.get("id") for r in existing_checklist_records}
-        if existing_checklist_records:
-            logger.info(f"Resuming checklist: {len(existing_checklist_records)} existing")
-        combined_checklist_metrics = list(existing_checklist_records)
-        evaluator_model = GPT(evaluator_model_name, system_prompt=CHECKLIST_EVAL_SYSTEM_PROMPT)
-        for report in tqdm(reports, desc="Checklist eval", unit="report"):
+            existing_records = [r for r in existing_records if r.get("id") in sampled_ids]
+            existing_ids = {r.get("id") for r in existing_records}
+        if existing_records:
+            logger.info(f"Resuming {mode}: {len(existing_records)} existing")
+
+        combined_metrics = list(existing_records)
+        failed_ids = []
+        models = build_models()
+        for report in tqdm(reports, desc=f"{mode.capitalize()} eval", unit="report"):
             question_id = report.get("id")
-            assert question_id in dataset, f"Question ID {question_id} not found in dataset {dataset_file}"
-            if question_id in existing_checklist_ids:
+            if question_id in existing_ids:
                 continue
             try:
-                metric = evaluate_checklist(
-                    report,
-                    dataset[question_id],
-                    evaluator_model,
-                    **kwargs
-                )
-                existing_checklist_ids.add(question_id)
-                combined_checklist_metrics.append(metric)
-                append_jsonl(metric, str(checklist_output))
+                metric = evaluate_one(report, models)
+                existing_ids.add(question_id)
+                combined_metrics.append(metric)
+                append_jsonl(metric, str(mode_output))
             except Exception as e:
-                logger.error(f"Checklist eval failed for Q{question_id}: {e}")
+                failed_ids.append(question_id)
+                logger.error(f"{mode.capitalize()} eval failed for Q{question_id}: {e}")
                 continue
-        
+
         # Aggregate and save the latest dataset-level metrics across all evaluations
-        agg_metrics = aggregate_checklist_metrics(combined_checklist_metrics)
         agg_entry = {
             "turn": turn,
-            "eval_type": "checklist",
-            **agg_metrics,
+            "eval_type": mode,
+            **aggregate(combined_metrics),
         }
-        append_jsonl(agg_entry, str(agg_metrics_file))
-        logger.info(f"Checklist done → {checklist_output.name}")
-    
-    if eval_mode in ["citation", "all"]:
-        citation_output = output_path / f"citation_turn{turn}.jsonl"
-        _, existing_citation_ids, existing_citation_records = _load_existing_metrics(citation_output, ignore_existing)
-        # Filter existing records to sampled subset if num_questions is specified
-        if sampled_ids is not None:
-            existing_citation_records = [r for r in existing_citation_records if r.get("id") in sampled_ids]
-            existing_citation_ids = {r.get("id") for r in existing_citation_records}
-        if existing_citation_records:
-            logger.info(f"Resuming citation: {len(existing_citation_records)} existing")
-        combined_citation_metrics = list(existing_citation_records)
-        claim_extraction_model = GPT(claim_extraction_model_name, system_prompt=CLAIM_EXTRACTION_SYSTEM_PROMPT)
-        supported_judge_model = GPT(supported_judge_model_name, system_prompt=SUPPORTED_JUDGE_SYSTEM_PROMPT)
-        webpage_summarization_model = GPT(webpage_summarization_model_name, system_prompt=CONTENT_SUMMARIZATION_SYSTEM_PROMPT)
-
-        for report in tqdm(reports, desc="Citation eval", unit="report"):
-            question_id = report.get("id")
-            if question_id in existing_citation_ids:
-                continue
-            try:
-                metric = evaluate_citations(
-                    report,
-                    claim_extraction_model,
-                    supported_judge_model,
-                    webpage_summarization_model=webpage_summarization_model,
-                    **kwargs
-                )
-                existing_citation_ids.add(question_id)
-                combined_citation_metrics.append(metric)
-                append_jsonl(metric, str(citation_output))
-            except Exception as e:
-                logger.error(f"Citation eval failed for Q{question_id}: {e}")
-                continue
-        
-        # Aggregate and save dataset-level metrics across all evaluations
-        agg_metrics = aggregate_citation_metrics(combined_citation_metrics)
-        agg_entry = {
-            "turn": turn,
-            "eval_type": "citation",
-            **agg_metrics,
+        _upsert_agg_entry(agg_metrics_file, agg_entry)
+        summary[mode] = {
+            "aggregate": agg_entry,
+            "num_evaluated": len(combined_metrics),
+            "failed_ids": failed_ids,
         }
-        append_jsonl(agg_entry, str(agg_metrics_file))
-        logger.info(f"Citation done → {citation_output.name}")
-    
-    if eval_mode in ["rubric", "all"]:
-        rubric_output = output_path / f"rubric_turn{turn}.jsonl"
-        _, existing_rubric_ids, existing_rubric_records = _load_existing_metrics(rubric_output, ignore_existing)
-        # Filter existing records to sampled subset if num_questions is specified
-        if sampled_ids is not None:
-            existing_rubric_records = [r for r in existing_rubric_records if r.get("id") in sampled_ids]
-            existing_rubric_ids = {r.get("id") for r in existing_rubric_records}
-        if existing_rubric_records:
-            logger.info(f"Resuming rubric: {len(existing_rubric_records)} existing")
-        combined_rubric_metrics = list(existing_rubric_records)
-        rubric_judge_model = GPT(rubric_judge_model_name, system_prompt=RUBRIC_EVAL_SYSTEM_PROMPT)
-        for report in tqdm(reports, desc="Rubric eval", unit="report"):
-            question_id = report.get("id")
-            dataset_item = dataset.get(question_id, {})
-            if question_id in existing_rubric_ids:
-                continue
-            
-            try:
-                metric = evaluate_rubric(
-                    report,
-                    dataset_item,
-                    rubric_judge_model,
-                    rubric_dimensions=["presentation"],
-                    **kwargs
-                )
-                existing_rubric_ids.add(question_id)
-                combined_rubric_metrics.append(metric)
-                append_jsonl(metric, str(rubric_output))
-            except Exception as e:
-                logger.error(f"Rubric eval failed for Q{question_id}: {e}")
-                continue
-        
-        agg_metrics = aggregate_rubric_metrics(combined_rubric_metrics)
-        agg_entry = {
-            "turn": turn,
-            "eval_type": "rubric",
-            **agg_metrics,
-        }
-        append_jsonl(agg_entry, str(agg_metrics_file))
-        logger.info(f"Rubric done → {rubric_output.name}")
+        if failed_ids:
+            logger.warning(
+                f"{mode.capitalize()}: {len(failed_ids)}/{len(reports)} reports failed and are excluded "
+                f"from the aggregate; re-run the same command to retry them. Failed IDs: {failed_ids}"
+            )
+        logger.info(f"{mode.capitalize()} done → {mode_output.name}")
         
     logger.info(f"✓ All evaluations completed → {output_path}")
+    return summary
 
 
 def main():
     parser = argparse.ArgumentParser(description="Evaluate generated reports")
     parser.add_argument("--report_file", type=str, required=True,
                         help="Path to generated report JSONL file")
-    parser.add_argument("--dataset_file", type=str, required=True,
-                        help="Path to dataset JSONL file")
+    parser.add_argument("--dataset_file", "--dataset", dest="dataset_file", type=str, required=True,
+                        help="Dataset name (e.g., ResearcherBench) or path to a dataset JSONL file")
     parser.add_argument("--output_dir", type=str,
                         help="Directory to save evaluation results (defaults to same directory as report file)")
     parser.add_argument("--eval_mode", "--mode", dest="eval_mode", type=str, default="all",
                         choices=["checklist", "citation", "rubric", "all"],
                         help="Evaluation mode")
-    parser.add_argument("--evaluator_model", type=str, default="gpt-4.1-mini",
+    parser.add_argument("--evaluator_model", type=str, default=DEFAULT_JUDGE_MODEL,
                         help="Model for checklist evaluation")
-    parser.add_argument("--claim_extraction_model", type=str, default="gpt-4.1-mini",
+    parser.add_argument("--claim_extraction_model", type=str, default=DEFAULT_JUDGE_MODEL,
                         help="Model for claim extraction")
-    parser.add_argument("--supported_judge_model", type=str, default="gpt-4.1-mini",
+    parser.add_argument("--supported_judge_model", type=str, default=DEFAULT_JUDGE_MODEL,
                         help="Model for judging claim support")
-    parser.add_argument("--webpage_summarization_model", type=str, default="gpt-4.1-nano",
+    parser.add_argument("--webpage_summarization_model", type=str, default=DEFAULT_SUMMARIZATION_MODEL,
                         help="Model for summarizing webpage content (optional, e.g., gpt-4.1-nano)")
-    parser.add_argument("--rubric_judge_model", type=str, default="gpt-4.1-mini",
+    parser.add_argument("--rubric_judge_model", type=str, default=DEFAULT_JUDGE_MODEL,
                         help="Model for rubric evaluation")
     parser.add_argument("--ignore_existing", action="store_true",
                         help="Re-evaluate all reports even if metrics already exist")

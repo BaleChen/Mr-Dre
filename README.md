@@ -24,6 +24,7 @@ Human researchers rarely write a report in a single shot, as we iteratively draf
 - [News](#news)
 - [Setup](#setup)
 - [Data](#data)
+- [Evaluate Your Own DRA](#evaluate-your-own-dra)
 - [DRA Report Generation](#dra-report-generation)
 - [DRA Report Evaluation](#dra-report-evaluation)
 - [Release Progress](#release-progress)
@@ -31,6 +32,10 @@ Human researchers rarely write a report in a single shot, as we iteratively draf
 - [Citation](#citation)
 
 ## News
+[10/2026] 🏆 Our paper was accepted to ACL 2026 and received a **SAC Highlight Award**!
+
+[10/2026] Evaluating your own DRA is now plug-and-play: see [Evaluate Your Own DRA](#evaluate-your-own-dra).
+
 [01/20/2026] Initial Code Release🎉
 
 ## Setup
@@ -39,8 +44,8 @@ We recommend using [uv](https://github.com/astral-sh/uv) to quickly set up and m
 
 ```shell
 # Clone the repository
-git clone https://github.com/BaleChen/mt-dra.git
-cd mt-dra
+git clone https://github.com/BaleChen/Mr-Dre.git
+cd Mr-Dre
 
 # Set up the environment
 uv sync
@@ -50,7 +55,7 @@ source .venv/bin/activate
 ```
 
 
-Then, set your API keys as environment variables by defining them in `.env`. You can use our provided `.env.example` as a reference. We require four API Keys: `OPENAI_API_KEY`, `PERPLEXITY_API_KEY`, `JINA_API_KEY`, and `SERPER_API_KEY`.
+Then, set your API keys as environment variables by defining them in `.env`. You can use our provided `.env.example` as a reference. Evaluation only requires `OPENAI_API_KEY` (LLM judges) and `JINA_API_KEY` (crawling cited webpages). Generating reports with the built-in DRAs additionally requires `PERPLEXITY_API_KEY` and `SERPER_API_KEY`. Serving open-weight DRAs locally needs vLLM, which you can install with `uv sync --extra serve`.
 
 > **Note:** Tongyi Deep Research, DR Tulu, and Open Deep Research require customized environment setup. We recommend isolating the server-side and client-side environments for best compatibility. See [`engine/README.md`](engine/README.md) for detailed instructions on setting up each DRA engine's server.
 
@@ -86,6 +91,30 @@ These JSONL files are preprocessed into a standardized format compatible with th
 
 To bring your own dataset, ensure the questions have annotated *question-specific checklists* for report comprehensiveness evaluation. Process your dataset into a JSONL file following the format above and name it `YOUR_DATASET_NAME.jsonl`.
 
+## Evaluate Your Own DRA
+
+All evaluation goes through one command. Save your agent's reports as JSONL with one `{"id": ..., "report": "..."}` object per line, where `id` matches the dataset and cited sources appear as URLs in the report text, then run:
+
+```bash
+python mrdre.py evaluate --dataset ResearcherBench --reports my_dra_turn1.jsonl --output_dir results/my-dra
+```
+
+This scores Comprehensiveness, Factuality, and Presentation, prints a summary table, and writes `summary.json` and CSV tables to `results/my-dra/`. The run is resumable, so re-running the same command retries only the reports that have not been evaluated.
+
+To evaluate **multi-turn revision**, let Mr Dre simulate the user feedback, run your agent on the exported conversations, and evaluate both turns together:
+
+```bash
+# Simulate feedback for turn 2 (content_feedback, format_feedback, or reflection)
+python mrdre.py feedback --dataset ResearcherBench --output_dir results/my-dra --turn 1 --type content_feedback
+
+# Run your agent on each record's "messages" in results/my-dra/feedback_turn2.jsonl and save my_dra_turn2.jsonl
+
+# Evaluate both turns and the revision metrics (Incorporation Rate, Break Rate, and score deltas)
+python mrdre.py evaluate --dataset ResearcherBench --reports my_dra_turn1.jsonl my_dra_turn2.jsonl --output_dir results/my-dra
+```
+
+Alternatively, wrap your agent as an engine by implementing a single `generate(messages)` method, and the generation scripts below will run all turns for you. [`docs/evaluate_your_dra.md`](docs/evaluate_your_dra.md) describes both options, the report format, the outputs, and the metrics in detail.
+
 ## DRA Report Generation
 
 Use `generate_report.sh` to generate reports with supported DRAs. This script supports multi-turn report generation or revision with different feedback types.
@@ -104,7 +133,7 @@ Use the provided shell script for easier execution:
 ```
 
 ### Key Parameters
-The `evaluate_report.sh` script accepts the following parameters:
+The `generate_report.sh` script accepts the following parameters:
 - `<dataset>`: Dataset name (`ResearcherBench`, `RigorousBench`, `ResearchRubrics`) [required]
 - `<model>`: Model name (`dr-tulu`, `o4-mini-deep-research`, `o4-gpt4.1`, `sonar-deep-research`, `tongyi-deep-research`) [required]
 - `<turn>`: Turn number (starting from 1) [default: 1]
@@ -112,7 +141,13 @@ The `evaluate_report.sh` script accepts the following parameters:
 
 ## DRA Report Evaluation
 
-Use `evaluate_report.sh` to evaluate generated Deep Research reports. It supports three evaluation modes: checklist, citation, and rubric. Note that the three modes correspond to our three evaluation dimentions defined in our paper: Comprehensiveness is measured by *checklist* coverage; Factuality uses *citation*-based metrics (citation faithfulness and claim groundedness); Presentation score relies on a fixed set of *rubrics* to evaluate.
+We recommend `mrdre.py evaluate` (see [Evaluate Your Own DRA](#evaluate-your-own-dra)), which also accepts the output folders of `generate_report.sh` directly:
+
+```bash
+python mrdre.py evaluate --dataset ResearcherBench --run_dir output/ResearcherBench/init/o4-mini-deep-research
+```
+
+The lower-level `evaluate_report.sh` evaluates a single report file. It supports three evaluation modes: checklist, citation, and rubric. Note that the three modes correspond to our three evaluation dimensions defined in our paper: Comprehensiveness is measured by *checklist* coverage; Factuality uses *citation*-based metrics (citation faithfulness and claim groundedness); Presentation score relies on a fixed set of *rubrics* to evaluate.
 
 ### Basic Usage
 
@@ -129,7 +164,7 @@ The `evaluate_report.sh` script accepts the following parameters:
 - `<eval_mode>`: Optional. Evaluation mode (`all`, `checklist`, `citation`, `rubric`) [default: all]
 - `<num_questions>`: Optional. Number of questions to evaluate (-1 for all) [default: -1]
 
-Incorporation rate and break rate evalution guide incoming...🧑‍💻
+Similarly, `python evaluate_change.py <gen_turn{i}.jsonl> <gen_turn{j}.jsonl> [--formal-change]` computes the revision metrics between two evaluated turns; `mrdre.py evaluate` does this automatically for consecutive turns.
 
 ## Release Progress
 
@@ -139,9 +174,9 @@ Incorporation rate and break rate evalution guide incoming...🧑‍💻
 - [x] Feedback simulation
 - [x] Datasets used in our paper
 - [x] Shell scripts for easy generation/evaluation
-- [ ] "How to Evaluate External DR Reports?" guide
+- [x] "How to Evaluate External DR Reports?" guide ([docs/evaluate_your_dra.md](docs/evaluate_your_dra.md))
 - [ ] Tongyi, DR Tulu, Open Deep Research server-side code
-- [ ] "How to Add a New DRA Engine" guide
+- [x] "How to Add a New DRA Engine" guide ([docs/evaluate_your_dra.md](docs/evaluate_your_dra.md#option-b-wrap-your-agent-as-an-engine))
 
 ## Contact Us
 

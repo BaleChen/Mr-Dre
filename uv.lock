@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.12"
 
 [[package]]
@@ -1493,7 +1493,7 @@ name = "mlx"
 version = "0.30.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "mlx-metal", marker = "sys_platform == 'darwin'" },
+    { name = "mlx-metal" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/11/b3/e24c3a69dad0cf4404bb174c6fed0d804022da64758cd815a254e1cd0627/mlx-0.30.3-cp312-cp312-macosx_14_0_arm64.whl", hash = "sha256:0b275168b80645a155b456e1a457a37fb5ee2c251e8fbd8db9e153351a9e2d2f", size = 569398, upload-time = "2026-01-14T01:16:49.804Z" },
@@ -1513,7 +1513,7 @@ version = "0.29.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "jinja2" },
-    { name = "mlx", marker = "sys_platform == 'darwin'" },
+    { name = "mlx" },
     { name = "numpy" },
     { name = "protobuf" },
     { name = "pyyaml" },
@@ -1574,6 +1574,10 @@ dependencies = [
     { name = "tenacity" },
     { name = "tqdm" },
     { name = "typing-extensions" },
+]
+
+[package.optional-dependencies]
+serve = [
     { name = "vllm" },
 ]
 
@@ -1586,8 +1590,9 @@ requires-dist = [
     { name = "tenacity", specifier = "==9.1.2" },
     { name = "tqdm", specifier = "==4.67.1" },
     { name = "typing-extensions", specifier = "==4.15.0" },
-    { name = "vllm", specifier = ">=0.13.0" },
+    { name = "vllm", marker = "extra == 'serve'", specifier = ">=0.13.0" },
 ]
+provides-extras = ["serve"]
 
 [[package]]
 name = "msgpack"

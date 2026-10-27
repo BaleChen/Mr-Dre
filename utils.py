@@ -146,3 +146,26 @@ def get_file_path(dir_name: str, model_name: str, round_num: int, mode: str, num
 
     return os.path.join(dir_name, mode, folder_model_name, file_name)
 
+
+
+def resolve_dataset_path(dataset: str) -> str:
+    """
+    Resolve a dataset given either by name (e.g., "ResearcherBench") or by path to a JSONL file.
+
+    Args:
+        dataset: Dataset name under ./data, or path to a dataset JSONL file
+
+    Returns:
+        Path to the dataset JSONL file
+    """
+    import os
+
+    if os.path.isfile(dataset):
+        return dataset
+    candidate = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", f"{dataset}.jsonl")
+    if os.path.isfile(candidate):
+        return candidate
+    raise FileNotFoundError(
+        f"Dataset '{dataset}' is neither an existing file nor a dataset name under ./data "
+        "(ResearcherBench, RigorousBench, ResearchRubrics)."
+    )
