@@ -90,21 +90,21 @@ def load_feedback(feedback_path: str) -> List[Dict[str, Any]]:
     return feedbacks
 
 
-def load_gen_files(gen_dir: str, round_num: int = 1) -> Dict[int, Dict[str, Any]]:
+def load_gen_files(gen_dir: str, turn_num: int = 1) -> Dict[int, Dict[str, Any]]:
     """
-    Load gen_turn{round_num}.jsonl file and build an ID to content mapping.
+    Load gen_turn{turn_num}.jsonl file and build an ID to content mapping.
     
     Args:
-        gen_dir: Directory containing gen_turn{round_num}.jsonl file
-        round_num: Round number to load (default: 1)
+        gen_dir: Directory containing gen_turn{turn_num}.jsonl file
+        turn_num: Turn number to load (default: 1)
         
     Returns:
         Mapping from ID to gen entry (containing question and report)
     """
     gen_map = {}
     
-    # Load gen_turn{round_num}.jsonl file
-    filename = f"gen_turn{round_num}.jsonl"
+    # Load gen_turn{turn_num}.jsonl file
+    filename = f"gen_turn{turn_num}.jsonl"
     filepath = os.path.join(gen_dir, filename)
     if os.path.exists(filepath):
         with open(filepath, 'r', encoding='utf-8') as f:

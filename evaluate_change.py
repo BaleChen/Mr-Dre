@@ -236,8 +236,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Compare two generation runs.")
     parser.add_argument("gen_file_v1", type=str, help="Generation file for version 1")
     parser.add_argument("gen_file_v2", type=str, help="Generation file for version 2")
-    parser.add_argument("--formal-change", default=False, action="store_true",
-                        help="Whether to compute the eval metrics for formal feedback.")
+    parser.add_argument("--format-feedback", default=False, action="store_true",
+                        help="Judge the incorporation rate with the pairwise LLM judge (format feedback); "
+                             "otherwise it is the fix rate of the targeted checklist items (content feedback).")
     parser.add_argument("--output-file", type=str, default="incorporation_results.jsonl",
                         help="Output file to save detailed scores")
     args = parser.parse_args()
@@ -261,9 +262,9 @@ def main() -> None:
     faith_delta, ground_delta = citation_stats(cite_v1, cite_v2)
     presentation_delta = rubric_stats(rub_v1, rub_v2)
 
-    # Compute incorporation rate: fix_rate for checklist feedback, judge for formal feedback
+    # Compute incorporation rate: fix_rate for checklist feedback, judge for format feedback
     # (they don't happen together, so we merge them into one metric)
-    if args.formal_change:
+    if args.format_feedback:
         incorporation_rate, detailed_results = judge_incorporation_rate(gen_reports_v1, gen_reports_v2)
 
         if detailed_results:

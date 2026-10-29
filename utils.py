@@ -110,18 +110,18 @@ def model_name(model: Any) -> str:
     return getattr(model, "__class__", type(model)).__name__
 
 
-def get_file_path(dir_name: str, model_name: str, round_num: int, mode: str, num_items: int = None, use_reviser: bool = False) -> str:
+def get_file_path(dir_name: str, model_name: str, turn_num: int, mode: str, num_items: int = None, use_reviser: bool = False) -> str:
     """
-    Generate the output file path for the current round.
+    Generate the output file path for the current turn.
 
     The resulting path follows the pattern:
-        {dir_name}/{mode}/{model_name}/gen_turn{round_num}.jsonl
+        {dir_name}/{mode}/{model_name}/gen_turn{turn_num}.jsonl
 
     Args:
         dir_name: Base directory for outputs
         model_name: Name of the model
-        round_num: Current round number
-        mode: Round type (init, reflection, checklist_feedback, formal_feedback)
+        turn_num: Current turn number
+        mode: Turn type (init, reflection, content_feedback, format_feedback)
         num_items: Number of checklist items (only for checklist_feedback)
         use_reviser: Whether to use reviser agent
 
@@ -130,7 +130,7 @@ def get_file_path(dir_name: str, model_name: str, round_num: int, mode: str, num
     """
     import os
     
-    if round_num == 1:
+    if turn_num == 1:
         mode = 'init'
 
     # Handle refined modes
@@ -142,7 +142,7 @@ def get_file_path(dir_name: str, model_name: str, round_num: int, mode: str, num
         mode = f'{mode}_k={num_items}'
 
     folder_model_name = f"{model_name}_reviser" if use_reviser else model_name
-    file_name = f"gen_turn{round_num}.jsonl"
+    file_name = f"gen_turn{turn_num}.jsonl"
 
     return os.path.join(dir_name, mode, folder_model_name, file_name)
 

@@ -459,7 +459,7 @@ def construct_conversations(
                 report = full_response['report'] if full_response else None
 
                 if rnd == 1:
-                    # Round 1: only append the assistant report
+                    # Turn 1: only append the assistant report
                     if report:
                         conv.append({
                             "role": "assistant",
@@ -470,7 +470,7 @@ def construct_conversations(
                         to_delete.append(qid)
                         continue
                 else:
-                    # Round 2+: append user(signal_k) then assistant(report_k)
+                    # Turn 2+: append user(signal_k) then assistant(report_k)
                     if signal_prev:
                         conv.append({
                             "role": "user",
