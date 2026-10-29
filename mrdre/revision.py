@@ -15,6 +15,7 @@ from tqdm import tqdm
 
 from mrdre.dr_eval.eval_prompts import PAIRWISE_JUDGE_SYSTEM_PROMPT, PAIRWISE_JUDGE_USER_PROMPT
 from mrdre.engine.oai import GPT
+from mrdre.feedback import feedback_signal
 from mrdre.utils import save_jsonl
 
 logger = logging.getLogger(__name__)
@@ -235,11 +236,7 @@ def attach_feedback(reports: List[Dict[str, Any]], feedback_records: List[Dict[s
         if item is None:
             report.pop("signal", None)
             continue
-        report["signal"] = {
-            "feedback_text": item.get("feedback", ""),
-            "targeted_item": item.get("item", []),
-            "targeted_id": item.get("item_id", []),
-        }
+        report["signal"] = feedback_signal(item)
         matched += 1
     return matched
 

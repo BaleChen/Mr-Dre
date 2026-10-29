@@ -56,8 +56,9 @@ def load_reports(
     Load a reports JSONL file into the record format the judges read.
 
     A record needs "id" and the report text, either as "report" or as
-    "full_response.report" (the format written by generation). A missing
-    "question" is filled in from the dataset.
+    "full_response.report" (the format written by generation). IDs are matched to
+    the dataset's IDs by their string form, and a missing "question" is filled in
+    from the dataset.
 
     Args:
         report_file: Path to the reports JSONL file
@@ -68,9 +69,13 @@ def load_reports(
         List of report records with "id", "question" and "full_response.report"
     """
     reports = load_jsonl(report_file)
-    unknown_ids = [report.get("id") for report in reports if report.get("id") not in dataset]
+    # Match IDs by their string form, so "1" in a reports file matches 1 in the dataset
+    dataset_ids = {str(qid): qid for qid in dataset}
+    unknown_ids = [report.get("id") for report in reports if str(report.get("id")) not in dataset_ids]
     if unknown_ids:
         raise ValueError(f"{report_file}: {len(unknown_ids)} report IDs are not in the dataset, e.g. {unknown_ids[:5]}")
+    for report in reports:
+        report["id"] = dataset_ids[str(report["id"])]
 
     if question_ids is not None:
         reports = [report for report in reports if report["id"] in question_ids]

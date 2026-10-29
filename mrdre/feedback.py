@@ -518,6 +518,15 @@ def generate_format_feedback_batch(
     return outputs
 
 
+def feedback_signal(item: Dict[str, Any]) -> Dict[str, Any]:
+    """Convert a feedback record into the "signal" stored with the report that answers it."""
+    return {
+        "feedback_text": item.get("feedback", ""),
+        "targeted_item": item.get("item", []),
+        "targeted_id": item.get("item_id", []),
+    }
+
+
 def simulate_feedback(
     reports: List[Dict[str, Any]],
     feedback_type: str,
