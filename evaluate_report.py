@@ -144,13 +144,16 @@ def evaluate_reports(
     if ignore_existing:
         logger.info("Re-evaluating all reports (ignore_existing=True)")
 
-    # DR Tulu specific postprocessing 
-    if "dr-tulu" in report_file:
+    # DR Tulu specific postprocessing: its reports cite snippet IDs, which are
+    # resolved to URLs through the snippet_map stored with each report
+    if any((report.get("full_response") or {}).get("snippet_map") for report in reports):
         from engine.dr_tulu import parse_and_format_citations
-        
+
         for report in tqdm(reports, desc="DR Tulu pre-eval processing"):
             report_text = report["full_response"]["report"]
-            snippet_map = report["full_response"]["snippet_map"]
+            snippet_map = report["full_response"].get("snippet_map")
+            if not snippet_map:
+                continue
 
             new_report_text = parse_and_format_citations(report_text, snippet_map)
             report["full_response"]["report"] = new_report_text
