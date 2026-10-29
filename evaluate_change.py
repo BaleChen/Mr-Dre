@@ -172,7 +172,7 @@ def citation_stats(cite_v1: List[Dict], cite_v2: List[Dict]) -> Tuple[float, flo
 
 def rubric_stats(rub_v1: List[Dict], rub_v2: List[Dict]) -> float:
     pairs = align_by_id(rub_v1, rub_v2)
-    deltas = [m2["organization"] - m1["organization"] for m1, m2 in pairs if "organization" in m1 and "organization" in m2]
+    deltas = [m2["presentation"] - m1["presentation"] for m1, m2 in pairs if "presentation" in m1 and "presentation" in m2]
     return sum(deltas) / len(deltas) if deltas else 0.0
 
 
