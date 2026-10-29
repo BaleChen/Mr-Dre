@@ -209,7 +209,7 @@ def get_feedbacks(
 
         reports_by_id: Dict[str, str] = {}
         try:
-            report_data = load_file(report_file)
+            report_data = load_jsonl(report_file)
             for item in report_data:
                 qid = item.get("id")
                 if qid is None:
