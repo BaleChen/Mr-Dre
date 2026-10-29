@@ -20,7 +20,7 @@ TYPE=${4:-init}
 mkdir -p ./logs
 
 python call_dra.py \
-    --round $TURN \
+    --turn $TURN \
     --type $TYPE \
     --dataset $DATASET \
     --model $MODEL \
