@@ -31,6 +31,8 @@ Human researchers rarely write a report in a single shot, as we iteratively draf
 - [Citation](#citation)
 
 ## News
+[07/2026] 🏆 Our paper was accepted to ACL 2026 and received a **SAC Highlight Award**!
+
 [01/20/2026] Initial Code Release🎉
 
 ## Setup
@@ -39,8 +41,8 @@ We recommend using [uv](https://github.com/astral-sh/uv) to quickly set up and m
 
 ```shell
 # Clone the repository
-git clone https://github.com/BaleChen/mt-dra.git
-cd mt-dra
+git clone https://github.com/BaleChen/Mr-Dre.git
+cd Mr-Dre
 
 # Set up the environment
 uv sync
@@ -104,7 +106,7 @@ Use the provided shell script for easier execution:
 ```
 
 ### Key Parameters
-The `evaluate_report.sh` script accepts the following parameters:
+The `generate_report.sh` script accepts the following parameters:
 - `<dataset>`: Dataset name (`ResearcherBench`, `RigorousBench`, `ResearchRubrics`) [required]
 - `<model>`: Model name (`dr-tulu`, `o4-mini-deep-research`, `o4-gpt4.1`, `sonar-deep-research`, `tongyi-deep-research`) [required]
 - `<turn>`: Turn number (starting from 1) [default: 1]
@@ -112,7 +114,7 @@ The `evaluate_report.sh` script accepts the following parameters:
 
 ## DRA Report Evaluation
 
-Use `evaluate_report.sh` to evaluate generated Deep Research reports. It supports three evaluation modes: checklist, citation, and rubric. Note that the three modes correspond to our three evaluation dimentions defined in our paper: Comprehensiveness is measured by *checklist* coverage; Factuality uses *citation*-based metrics (citation faithfulness and claim groundedness); Presentation score relies on a fixed set of *rubrics* to evaluate.
+Use `evaluate_report.sh` to evaluate generated Deep Research reports. It supports three evaluation modes: checklist, citation, and rubric. Note that the three modes correspond to our three evaluation dimensions defined in our paper: Comprehensiveness is measured by *checklist* coverage; Factuality uses *citation*-based metrics (citation faithfulness and claim groundedness); Presentation score relies on a fixed set of *rubrics* to evaluate.
 
 ### Basic Usage
 
@@ -129,7 +131,13 @@ The `evaluate_report.sh` script accepts the following parameters:
 - `<eval_mode>`: Optional. Evaluation mode (`all`, `checklist`, `citation`, `rubric`) [default: all]
 - `<num_questions>`: Optional. Number of questions to evaluate (-1 for all) [default: -1]
 
-Incorporation rate and break rate evalution guide incoming...🧑‍💻
+To compute the multi-turn revision metrics (Incorporation Rate, Break Rate, and score deltas) between two evaluated turns, run:
+
+```bash
+python evaluate_change.py <path/to/gen_turn{i}.jsonl> <path/to/gen_turn{j}.jsonl> [--format-feedback]
+```
+
+Pass `--format-feedback` when turn *j* received format feedback, so that the incorporation rate is judged by the pairwise LLM judge instead of the fix rate of targeted checklist items. Both files must be located in the output folders written by `generate_report.sh` (`output/<dataset>/<turn_type>/<model>/`) and must already be evaluated, since the script reads the evaluation results that `evaluate_report.sh` saves next to each file.
 
 ## Release Progress
 
@@ -140,7 +148,6 @@ Incorporation rate and break rate evalution guide incoming...🧑‍💻
 - [x] Datasets used in our paper
 - [x] Shell scripts for easy generation/evaluation
 - [ ] "How to Evaluate External DR Reports?" guide
-- [ ] Tongyi, DR Tulu, Open Deep Research server-side code
 - [ ] "How to Add a New DRA Engine" guide
 
 ## Contact Us
