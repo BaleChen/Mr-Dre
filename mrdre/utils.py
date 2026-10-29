@@ -3,8 +3,28 @@ Utility functions for the multi-turn deep research agent project.
 """
 
 import json
+import logging
+import random
+import sys
 from pathlib import Path
 from typing import List, Dict, Any
+
+# Benchmark files shipped with the repository
+DATA_DIR = Path(__file__).resolve().parents[1] / "data"
+
+
+def setup_logging(stream=sys.stderr):
+    """Configure console logging for the command-line entry points."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s │ %(levelname)-7s │ %(message)s",
+        datefmt="%H:%M:%S",
+        force=True,
+        stream=stream,
+    )
+    # Suppress noisy HTTP library logs
+    for name in ("httpx", "urllib3", "requests"):
+        logging.getLogger(name).setLevel(logging.WARNING)
 
 
 def load_jsonl(filepath: str) -> List[Dict[str, Any]]:
@@ -91,6 +111,54 @@ def load_dataset(dataset_path: str) -> Dict[int, Dict[str, Any]]:
     """
     dataset_items = load_jsonl(dataset_path)
     return {item["id"]: item for item in dataset_items}
+
+
+def resolve_dataset(name_or_path: str) -> Path:
+    """
+    Resolve a dataset argument to a JSONL file.
+
+    Args:
+        name_or_path: A benchmark name in data/ (case-insensitive, e.g. "researcherbench")
+            or a path to a dataset JSONL file
+
+    Returns:
+        Path to the dataset JSONL file
+    """
+    path = Path(name_or_path)
+    if path.is_file():
+        return path
+    candidates = sorted(DATA_DIR.glob("*.jsonl"))
+    if not candidates:
+        raise FileNotFoundError(
+            f"No benchmark files in {DATA_DIR}. Install Mr Dre from a clone with `pip install -e .`, "
+            "or pass a path to a dataset JSONL file."
+        )
+    for candidate in candidates:
+        if candidate.stem.lower() == name_or_path.lower():
+            return candidate
+    names = ", ".join(c.stem for c in candidates)
+    raise FileNotFoundError(f"Unknown dataset '{name_or_path}'. Use one of {names}, or a path to a JSONL file.")
+
+
+def sample_questions(questions: List[Dict[str, Any]], num_questions: int) -> List[Dict[str, Any]]:
+    """
+    Select a fixed random subset of questions (seed 42).
+
+    The subset is the same as the one call_dra.py selects with --num_questions, so
+    generation, feedback and evaluation work on the same questions.
+
+    Args:
+        questions: Dataset items in file order
+        num_questions: Subset size; -1 (or any value <= 0) keeps all questions
+
+    Returns:
+        The selected dataset items
+    """
+    if num_questions <= 0:
+        return questions
+    questions = list(questions)
+    random.Random(42).shuffle(questions)
+    return questions[:num_questions]
 
 
 def model_name(model: Any) -> str:

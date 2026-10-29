@@ -133,7 +133,7 @@ class ApiCache:
 # Create a global cache instance
 DEFAULT_CACHE = ApiCache(
     cache_dir=os.getenv(
-        "MCP_CACHE_DIR", str(Path(__file__).resolve().parents[2] / ".cache")
+        "MCP_CACHE_DIR", str(Path(__file__).resolve().parents[3] / ".cache")
     ),
     cache_ttl=86400 * 30,  # Default: 30 days cache
 )

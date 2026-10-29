@@ -21,6 +21,8 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
+FEEDBACK_TYPES = ("content", "format", "reflection")
+
 CONTENT_FEEDBACK_GPT_MODEL = "gpt-4.1-mini"
 FORMAT_FEEDBACK_GPT_MODEL = "gpt-4.1-mini"
 
