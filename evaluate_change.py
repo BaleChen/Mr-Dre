@@ -18,9 +18,9 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 from dotenv import load_dotenv
 from tqdm import tqdm
 
-from dr_eval.eval_prompts import PAIRWISE_JUDGE_SYSTEM_PROMPT, PAIRWISE_JUDGE_USER_PROMPT
-from engine.oai import GPT
-from utils import load_jsonl
+from mrdre.dr_eval.eval_prompts import PAIRWISE_JUDGE_SYSTEM_PROMPT, PAIRWISE_JUDGE_USER_PROMPT
+from mrdre.engine.oai import GPT
+from mrdre.utils import load_jsonl
 
 load_dotenv()
 

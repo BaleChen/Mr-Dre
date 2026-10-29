@@ -9,11 +9,11 @@ import sys
 from tqdm import tqdm
 from dotenv import load_dotenv
 
-from utils import load_jsonl, save_jsonl, append_jsonl, get_file_path
-from engine import DRA
-from engine.reviser_agent import ReviserAgent
-from feedback import generate_feedback_batch, generate_format_feedback_batch
-from feedback_refine import refine_feedback, load_feedback, load_gen_files
+from mrdre.utils import load_jsonl, save_jsonl, append_jsonl, get_file_path
+from mrdre.engine import DRA
+from mrdre.engine.reviser_agent import ReviserAgent
+from mrdre.feedback import generate_feedback_batch, generate_format_feedback_batch
+from mrdre.feedback_refine import refine_feedback, load_feedback, load_gen_files
 
 load_dotenv()
 

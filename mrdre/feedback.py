@@ -12,7 +12,7 @@ import random
 from typing import List, Dict, Any
 
 from tqdm import tqdm
-from engine.oai import GPT
+from mrdre.engine.oai import GPT
 from dotenv import load_dotenv
 
 load_dotenv()

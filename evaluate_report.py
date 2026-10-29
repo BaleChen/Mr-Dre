@@ -24,18 +24,18 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
 logging.getLogger("requests").setLevel(logging.WARNING)
 
-from dr_eval.checklist_eval import evaluate_checklist, aggregate_checklist_metrics
-from dr_eval.citation_eval import evaluate_citations, aggregate_citation_metrics
-from dr_eval.rubric_eval import evaluate_rubric, aggregate_rubric_metrics
-from dr_eval.eval_prompts import (
+from mrdre.dr_eval.checklist_eval import evaluate_checklist, aggregate_checklist_metrics
+from mrdre.dr_eval.citation_eval import evaluate_citations, aggregate_citation_metrics
+from mrdre.dr_eval.rubric_eval import evaluate_rubric, aggregate_rubric_metrics
+from mrdre.dr_eval.eval_prompts import (
     CHECKLIST_EVAL_SYSTEM_PROMPT,
     CLAIM_EXTRACTION_SYSTEM_PROMPT,
     CONTENT_SUMMARIZATION_SYSTEM_PROMPT,
     RUBRIC_EVAL_SYSTEM_PROMPT,
     SUPPORTED_JUDGE_SYSTEM_PROMPT,
 )
-from engine.oai import GPT
-from utils import load_jsonl, load_dataset, append_jsonl
+from mrdre.engine.oai import GPT
+from mrdre.utils import load_jsonl, load_dataset, append_jsonl
 
 
 def _load_existing_metrics(metrics_path: Path, ignore_existing: bool) -> Tuple[int, Set[int], List[Dict[str, Any]]]:
@@ -147,7 +147,7 @@ def evaluate_reports(
     # DR Tulu specific postprocessing: its reports cite snippet IDs, which are
     # resolved to URLs through the snippet_map stored with each report
     if any((report.get("full_response") or {}).get("snippet_map") for report in reports):
-        from engine.dr_tulu import parse_and_format_citations
+        from mrdre.engine.dr_tulu import parse_and_format_citations
 
         for report in tqdm(reports, desc="DR Tulu pre-eval processing"):
             report_text = report["full_response"]["report"]

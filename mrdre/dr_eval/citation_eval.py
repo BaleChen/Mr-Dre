@@ -10,13 +10,13 @@ from typing import Any, Dict, List, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 
-from dr_eval.eval_prompts import (
+from mrdre.dr_eval.eval_prompts import (
     get_citation_claim_extraction_prompts,
     get_citation_supported_judge_prompts,
     get_content_summarization_prompt,
 )
-from dr_eval.crawler.jina import fetch_webpage_content_jina
-from utils import model_name
+from mrdre.dr_eval.crawler.jina import fetch_webpage_content_jina
+from mrdre.utils import model_name
 
 logger = logging.getLogger(__name__)
 

@@ -8,11 +8,11 @@ import logging
 from typing import Dict, List, Any
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
-from dr_eval.eval_prompts import (
+from mrdre.dr_eval.eval_prompts import (
     get_rubric_eval_prompts,
     get_rubric_checklist_items,
 )
-from utils import model_name
+from mrdre.utils import model_name
 
 logger = logging.getLogger(__name__)
 

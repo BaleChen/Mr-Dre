@@ -9,10 +9,10 @@ import re
 from typing import Dict, List, Any
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
-from dr_eval.eval_prompts import (
+from mrdre.dr_eval.eval_prompts import (
     get_checklist_eval_prompts,
 )
-from utils import model_name
+from mrdre.utils import model_name
 
 logger = logging.getLogger(__name__)
 
