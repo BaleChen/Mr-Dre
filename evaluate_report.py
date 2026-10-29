@@ -1,5 +1,6 @@
 """
-Evaluate generated reports in the output/ folder layout of call_dra.py.
+Evaluate generated reports in the output/<dataset>/<turn type>/<model>/gen_turn{i}.jsonl
+folder layout of the paper's runs.
 
 The newer `mrdre evaluate` command takes any reports file and output directory.
 """
@@ -44,7 +45,7 @@ def main():
                         help="Re-evaluate all reports even if metrics already exist")
     parser.add_argument("--num_questions", type=int, default=-1,
                         help="Number of questions to evaluate (default: -1 for all). "
-                             "Uses the same seed (42) as call_dra.py to select the same subset.")
+                             "Uses the same seed (42) as generation to select the same subset.")
     args = parser.parse_args()
     setup_logging()
 

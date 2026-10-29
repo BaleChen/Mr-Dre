@@ -1,7 +1,8 @@
 """
-Compare two generation runs in the output/ folder layout of call_dra.py and emit a
-single CSV-friendly summary row with: Break Rate, Incorporation Rate, Checklist
-Coverage Delta, Citation Faithfulness Delta, Claim Groundedness Delta, Presentation Delta.
+Compare two generation runs in the output/<dataset>/<turn type>/<model>/ folder layout
+of the paper's runs and emit a single CSV-friendly summary row with: Break Rate,
+Incorporation Rate, Checklist Coverage Delta, Citation Faithfulness Delta, Claim
+Groundedness Delta, Presentation Delta.
 
 The newer `mrdre evaluate --previous-eval ... --feedback ...` command compares any two evaluated turns.
 """

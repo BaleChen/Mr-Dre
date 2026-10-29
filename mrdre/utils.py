@@ -171,8 +171,8 @@ def sample_questions(questions: List[Dict[str, Any]], num_questions: int) -> Lis
     """
     Select a fixed random subset of questions (seed 42).
 
-    The subset is the same as the one call_dra.py selects with --num_questions, so
-    generation, feedback and evaluation work on the same questions.
+    Generation, feedback and evaluation therefore work on the same questions. The
+    subset is the one used in our paper (e.g. the 100 RigorousBench questions).
 
     Args:
         questions: Dataset items in file order
@@ -203,41 +203,3 @@ def model_name(model: Any) -> str:
     if isinstance(model, str):
         return model
     return getattr(model, "__class__", type(model)).__name__
-
-
-def get_file_path(dir_name: str, model_name: str, turn_num: int, mode: str, num_items: int = None, use_reviser: bool = False) -> str:
-    """
-    Generate the output file path for the current turn.
-
-    The resulting path follows the pattern:
-        {dir_name}/{mode}/{model_name}/gen_turn{turn_num}.jsonl
-
-    Args:
-        dir_name: Base directory for outputs
-        model_name: Name of the model
-        turn_num: Current turn number
-        mode: Turn type (init, reflection, content_feedback, format_feedback)
-        num_items: Number of checklist items (only for checklist_feedback)
-        use_reviser: Whether to use reviser agent
-
-    Returns:
-        Generated file path as string
-    """
-    import os
-    
-    if turn_num == 1:
-        mode = 'init'
-
-    # Handle refined modes
-    original_mode = mode
-    if mode.startswith('refined_'):
-        original_mode = mode[len('refined_'):]
-    
-    if num_items is not None and original_mode == 'checklist_feedback':
-        mode = f'{mode}_k={num_items}'
-
-    folder_model_name = f"{model_name}_reviser" if use_reviser else model_name
-    file_name = f"gen_turn{turn_num}.jsonl"
-
-    return os.path.join(dir_name, mode, folder_model_name, file_name)
-

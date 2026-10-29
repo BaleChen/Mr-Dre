@@ -120,9 +120,9 @@ class DrTuluDeepResearchAgent(DeepResearchAgentBase):
     """
     Client for the local DR-Tulu auto_search server.
 
-    The server exposes a simple async job API (see engine/dr-tulu/agent/scripts/launch_server.py).
-    This client mirrors the interface used by other DeepResearchAgentBase implementations so it
-    can be plugged into call_dra.py without additional changes.
+    The server exposes a simple async job API (POST /api/v1/jobs, GET /api/v1/jobs/{id}). This
+    client mirrors the interface used by other DeepResearchAgentBase implementations so it can
+    be used by `mrdre generate`.
     """
 
     def __init__(

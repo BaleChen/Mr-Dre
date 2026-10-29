@@ -252,78 +252,6 @@ def is_failed_checklist_point(point: Dict[str, Any]) -> bool:
         return not is_covered
 
 
-def generate_feedback_batch(
-    qids: List[str],
-    eval_map: Dict[str, Dict[str, Any]],
-    questions_by_id: Dict[str, str],
-    num_points: int = 1,
-) -> List[Dict[str, Any]]:
-
-    """
-    Generate feedback for a batch of question IDs, given evaluation results and question texts.
-
-    This function looks up each question ID in:
-      - `eval_map` to find the corresponding evaluation result, and
-      - `questions_by_id` to find the original question text.
-
-    For each question:
-      1. It collects all evaluation points where `covered == False`.
-      2. It randomly selects one such point.
-      3. It calls `generate_feedback_for_point` to synthesize a feedback message.
-
-    Args:
-        qids:
-            List of question IDs (as strings or values convertible to strings)
-            that require feedback.
-        eval_map:
-            Mapping from question ID (string) to the evaluation item, e.g.:
-            {
-              "1": {
-                "id": 1,
-                "checklist_details": [
-                    {"item": "...", "covered": true/false, "justification": "...", "weight": ...},
-                    ...
-                    ]
-              },
-              ...
-            }
-        questions_by_id:
-            Mapping from question ID (string) to the original question text:
-            { "1": "original question text", ... }
-        num_points:
-            Number of evaluation points to sample for each question. Defaults to 1.
-
-    Returns:
-        A list of dictionaries, one per successfully generated feedback, each of the form:
-            {
-              "id": <original numeric or string id>,
-              "feedback": "<generated feedback>",
-              "question": "<original question text>",
-              "item": [ "<point text 1>", ... ],
-              "item_id": [ <point id 1>, ... ],
-            }
-    """
-    outputs: List[Dict[str, Any]] = []
-    qid_list = sorted(set(str(q) for q in qids))
-
-    for qid_str in tqdm(qid_list, desc="Content feedback", unit="q"):
-        eval_item = eval_map.get(qid_str)
-        question_text = questions_by_id.get(qid_str)
-
-        if eval_item is None:
-            logger.warning(f"Q{qid_str} not in eval_map, skipping")
-            continue
-        if question_text is None:
-            logger.warning(f"Q{qid_str} not in questions_by_id, skipping")
-            continue
-
-        output = generate_content_feedback(qid_str, eval_item, question_text, num_points)
-        if output is not None:
-            outputs.append(output)
-
-    return outputs
-
-
 def generate_content_feedback(
     qid_str: str,
     eval_item: Dict[str, Any],
@@ -335,13 +263,27 @@ def generate_content_feedback(
 
     Args:
         qid_str: Question ID as a string
-        eval_item: Checklist evaluation result of the question (see generate_feedback_batch)
+        eval_item: Checklist evaluation result of the question, e.g.:
+            {
+              "id": 1,
+              "checklist_details": [
+                  {"item": "...", "covered": true/false, "justification": "...", "weight": ...},
+                  ...
+                  ]
+            }
         question_text: The original question text
         num_points: Number of evaluation points to sample. Defaults to 1.
 
     Returns:
-        A feedback dictionary as in generate_feedback_batch, or None if fewer than
-        num_points checklist points failed.
+        None if fewer than num_points points failed (see is_failed_checklist_point),
+        otherwise a dictionary of the form:
+            {
+              "id": <original numeric or string id>,
+              "feedback": "<generated feedback>",
+              "question": "<original question text>",
+              "item": [ "<point text 1>", ... ],
+              "item_id": [ <point id 1>, ... ],
+            }
     """
     # By convention, checklist-based evaluation results are stored under "checklist_details".
     coverage_results = eval_item.get("checklist_details", [])
@@ -461,61 +403,6 @@ Please first select the most appropriate feedback example and then rewrite it to
     final_feedback = gpt(combined_prompt).strip()
     return final_feedback
 
-
-
-def generate_format_feedback_batch(
-    qids: List[str],
-    reports_by_id: Dict[str, str],
-    questions_by_id: Dict[str, str],
-) -> List[Dict[str, Any]]:
-    """
-    Generate format feedback for a batch of question IDs, given the reports and original questions.
-
-    Args:
-        qids: List of question IDs that require feedback.
-        reports_by_id: Mapping from question ID to the research report text.
-        questions_by_id: Mapping from question ID to the original question text.
-
-    Returns:
-        A list of dictionaries, one per successfully generated feedback, each of the form:
-            {
-              "id": <question ID>,
-              "feedback": <generated format feedback>,
-              "question": <original question text>,
-              "item": [],
-              "item_id": [],
-            }
-    """
-    outputs: List[Dict[str, Any]] = []
-    qid_list = sorted(set(str(q) for q in qids))
-
-    for qid_str in tqdm(qid_list, desc="Format feedback", unit="q"):
-        report = reports_by_id.get(qid_str)
-        question_text = questions_by_id.get(qid_str)
-
-        if report is None:
-            logger.warning(f"Q{qid_str} report not found, skipping")
-            continue
-        if question_text is None:
-            logger.warning(f"Q{qid_str} question not found, skipping")
-            continue
-
-        try:
-            feedback = generate_format_feedback(question_text, report)
-            outputs.append(
-                {
-                    "id": qid_str,
-                    "feedback": feedback,
-                    "question": question_text,
-                    "item": [],
-                    "item_id": [],
-                }
-            )
-        except Exception as e:
-            logger.warning(f"Q{qid_str} format feedback failed: {e}")
-            continue
-
-    return outputs
 
 
 def feedback_signal(item: Dict[str, Any]) -> Dict[str, Any]:
