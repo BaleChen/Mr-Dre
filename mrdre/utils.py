@@ -9,6 +9,8 @@ import sys
 from pathlib import Path
 from typing import List, Dict, Any
 
+logger = logging.getLogger(__name__)
+
 # Benchmark files shipped with the repository
 DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 
@@ -43,6 +45,31 @@ def load_jsonl(filepath: str) -> List[Dict[str, Any]]:
             if line.strip():
                 data.append(json.loads(line))
     return data
+
+
+def load_partial_jsonl(filepath: Path) -> List[Dict[str, Any]]:
+    """
+    Load the records an earlier, possibly interrupted run appended to a JSONL file.
+
+    A line cut off by an interrupted write is dropped and the file is rewritten
+    without it. A missing file has no records.
+    """
+    filepath = Path(filepath)
+    if not filepath.exists():
+        return []
+    records, broken = [], 0
+    with open(filepath, "r", encoding="utf-8") as f:
+        for line in f:
+            if not line.strip():
+                continue
+            try:
+                records.append(json.loads(line))
+            except json.JSONDecodeError:
+                broken += 1
+    if broken:
+        logger.warning(f"Dropping {broken} unreadable lines from {filepath}")
+        save_jsonl(records, str(filepath))
+    return records
 
 
 def save_jsonl(data: List[Dict[str, Any]], filepath: str):

@@ -9,10 +9,11 @@ original user queries.
 import json
 import logging
 import random
-from typing import List, Dict, Any
+from typing import Any, Dict, Iterator, List, Optional
 
 from tqdm import tqdm
 from mrdre.engine.oai import GPT
+from mrdre.feedback_refine import refine_feedback
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -22,6 +23,11 @@ logger = logging.getLogger(__name__)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 FEEDBACK_TYPES = ("content", "format", "reflection")
+
+REFLECTION_FEEDBACK = (
+    "Reflect on your current report and refine it. "
+    "Please only return the refined report without any other text."
+)
 
 CONTENT_FEEDBACK_GPT_MODEL = "gpt-4.1-mini"
 FORMAT_FEEDBACK_GPT_MODEL = "gpt-4.1-mini"
@@ -311,52 +317,71 @@ def generate_feedback_batch(
             logger.warning(f"Q{qid_str} not in questions_by_id, skipping")
             continue
 
-        # By convention, checklist-based evaluation results are stored under "checklist_details".
-        coverage_results = eval_item.get("checklist_details", [])
-
-        # Select only points that were not fully covered.
-        false_points = [p for p in coverage_results if is_failed_checklist_point(p)]
-        if not false_points:
-            logger.debug(f"Q{qid_str} has no uncovered points, skipping")
-            continue
-            
-        # If fewer points are available than requested, skip this question.
-        if len(false_points) < num_points:
-            logger.debug(f"Q{qid_str} has {len(false_points)} uncovered points (< {num_points}), skipping")
-            continue
-
-        # ---- Single point case: Call the original function, output wrapped in a list structure ----
-        if num_points == 1:
-            selected_point = random.choice(false_points)
-            feedback = generate_feedback_for_point(question_text, selected_point)
-            outputs.append(
-                {
-                    "id": eval_item.get("id", qid_str),
-                    "feedback": feedback,  
-                    "question": question_text,
-                    "item": [selected_point.get("item", "")], 
-                    "item_id": [selected_point.get("id", "")],
-                }
-            )
-
-        # ---- Multiple points case: Randomly sample num_points, call the multi version ----
-        else:
-            selected_points = random.sample(false_points, k=num_points)
-            feedback = generate_feedback_for_points(question_text, selected_points)
-            items_list = [p.get("item", "") for p in selected_points]
-            item_ids = [p.get("id", "") for p in selected_points]
-
-            outputs.append(
-                {
-                    "id": eval_item.get("id", qid_str),
-                    "feedback": feedback,  
-                    "question": question_text,
-                    "item": items_list,    # list of str
-                    "item_id": item_ids,   # list of ids
-                }
-            )
+        output = generate_content_feedback(qid_str, eval_item, question_text, num_points)
+        if output is not None:
+            outputs.append(output)
 
     return outputs
+
+
+def generate_content_feedback(
+    qid_str: str,
+    eval_item: Dict[str, Any],
+    question_text: str,
+    num_points: int = 1,
+) -> Optional[Dict[str, Any]]:
+    """
+    Generate feedback for one question on randomly selected checklist points it failed.
+
+    Args:
+        qid_str: Question ID as a string
+        eval_item: Checklist evaluation result of the question (see generate_feedback_batch)
+        question_text: The original question text
+        num_points: Number of evaluation points to sample. Defaults to 1.
+
+    Returns:
+        A feedback dictionary as in generate_feedback_batch, or None if fewer than
+        num_points checklist points failed.
+    """
+    # By convention, checklist-based evaluation results are stored under "checklist_details".
+    coverage_results = eval_item.get("checklist_details", [])
+
+    # Select only points that were not fully covered.
+    false_points = [p for p in coverage_results if is_failed_checklist_point(p)]
+    if not false_points:
+        logger.debug(f"Q{qid_str} has no uncovered points, skipping")
+        return None
+        
+    # If fewer points are available than requested, skip this question.
+    if len(false_points) < num_points:
+        logger.debug(f"Q{qid_str} has {len(false_points)} uncovered points (< {num_points}), skipping")
+        return None
+
+    # ---- Single point case: Call the original function, output wrapped in a list structure ----
+    if num_points == 1:
+        selected_point = random.choice(false_points)
+        feedback = generate_feedback_for_point(question_text, selected_point)
+        return {
+            "id": eval_item.get("id", qid_str),
+            "feedback": feedback,  
+            "question": question_text,
+            "item": [selected_point.get("item", "")], 
+            "item_id": [selected_point.get("id", "")],
+        }
+
+    # ---- Multiple points case: Randomly sample num_points, call the multi version ----
+    selected_points = random.sample(false_points, k=num_points)
+    feedback = generate_feedback_for_points(question_text, selected_points)
+    items_list = [p.get("item", "") for p in selected_points]
+    item_ids = [p.get("id", "") for p in selected_points]
+
+    return {
+        "id": eval_item.get("id", qid_str),
+        "feedback": feedback,  
+        "question": question_text,
+        "item": items_list,    # list of str
+        "item_id": item_ids,   # list of ids
+    }
 
 # Format feedback examples for seed selection
 FORMAT_FEEDBACK_EXAMPLES = [
@@ -491,3 +516,72 @@ def generate_format_feedback_batch(
             continue
 
     return outputs
+
+
+def simulate_feedback(
+    reports: List[Dict[str, Any]],
+    feedback_type: str,
+    checklist_records: Optional[List[Dict[str, Any]]] = None,
+    num_items: int = 1,
+    refine: bool = False,
+    seed: int = 42,
+) -> Iterator[Dict[str, Any]]:
+    """
+    Simulate one turn of user feedback on each report.
+
+    The random choices for a report (its checklist items, or the seed examples of format
+    feedback) are seeded with the seed and the report's question ID. A report therefore
+    gets the same feedback whichever other reports are in the run, and with refine, the
+    feedback that is refined is the feedback of a run without it.
+
+    Args:
+        reports: Report records with "id", "question" and "full_response.report"
+        feedback_type: "content" (on checklist items the report missed), "format"
+            (on writing and presentation) or "reflection" (a fixed request to self-refine)
+        checklist_records: Checklist evaluation records of the reports (content feedback only)
+        num_items: Number of missed checklist items per feedback (content feedback only)
+        refine: Rewrite each feedback into a localized edit plan (see feedback_refine.py)
+        seed: Random seed
+
+    Yields:
+        One feedback record per report: {"id", "feedback_type", "feedback", "question",
+        "item", "item_id"}, plus "original_feedback" if refined. Reports without feedback
+        are skipped: reports with an empty text, content feedback on reports without
+        checklist scores or with fewer than num_items missed checklist items, and feedback
+        that failed (logged).
+    """
+    if feedback_type not in FEEDBACK_TYPES:
+        raise ValueError(f"Unknown feedback type: {feedback_type!r}")
+    eval_map = {str(record["id"]): record for record in checklist_records or []}
+
+    for report in tqdm(reports, desc=f"{feedback_type.capitalize()} feedback", unit="report"):
+        qid = str(report["id"])
+        question = report["question"]
+        report_text = report["full_response"]["report"]
+        if not report_text:
+            logger.warning(f"Q{qid} has an empty report, skipping")
+            continue
+
+        if feedback_type == "content" and qid not in eval_map:
+            logger.warning(f"Q{qid} has no checklist scores, skipping")
+            continue
+
+        random.seed(f"{seed}:{qid}")
+        try:
+            if feedback_type == "content":
+                item = generate_content_feedback(qid, eval_map[qid], question, num_items)
+                if item is None:
+                    continue
+            elif feedback_type == "format":
+                feedback = generate_format_feedback(question, report_text)
+                item = {"id": qid, "feedback": feedback, "question": question, "item": [], "item_id": []}
+            else:
+                item = {"id": qid, "feedback": REFLECTION_FEEDBACK, "question": question, "item": [], "item_id": []}
+            if refine:
+                item = refine_feedback(item, {"question": question, "report": report_text})
+        except Exception as e:
+            logger.error(f"{feedback_type.capitalize()} feedback failed for Q{qid}: {e}")
+            continue
+
+        fields = {key: value for key, value in item.items() if key != "id"}
+        yield {"id": report["id"], "feedback_type": feedback_type, **fields}

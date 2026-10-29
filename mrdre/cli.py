@@ -18,15 +18,25 @@ load_dotenv(find_dotenv(usecwd=True))
 from mrdre.evaluate import (  # noqa: E402
     DEFAULT_JUDGE_MODEL,
     EVAL_MODES,
+    changed_reports,
     check_output_dir,
     evaluate_reports,
     load_evaluation,
     load_reports,
     summarize,
 )
-from mrdre.feedback import FEEDBACK_TYPES  # noqa: E402
+from mrdre.feedback import FEEDBACK_TYPES, simulate_feedback  # noqa: E402
 from mrdre.revision import attach_feedback, compute_revision_metrics  # noqa: E402
-from mrdre.utils import load_jsonl, resolve_dataset, sample_questions, save_json, setup_logging  # noqa: E402
+from mrdre.utils import (  # noqa: E402
+    append_jsonl,
+    load_jsonl,
+    load_partial_jsonl,
+    resolve_dataset,
+    sample_questions,
+    save_json,
+    save_jsonl,
+    setup_logging,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +53,7 @@ LIMIT_HELP = (
 def main(argv: Optional[List[str]] = None) -> None:
     parser = argparse.ArgumentParser(prog="mrdre", description=__doc__.strip())
     subparsers = parser.add_subparsers(dest="command", required=True)
+    _add_feedback_parser(subparsers)
     _add_evaluate_parser(subparsers)
 
     args = parser.parse_args(argv)
@@ -52,6 +63,110 @@ def main(argv: Optional[List[str]] = None) -> None:
     except (FileNotFoundError, ValueError) as e:
         # Problems with the inputs: show the message without a traceback
         raise SystemExit(f"mrdre {args.command}: {e}")
+
+
+def _load_dataset(name_or_path: str, limit: int):
+    """Return the dataset indexed by question ID and the IDs of the selected questions."""
+    dataset_items = load_jsonl(str(resolve_dataset(name_or_path)))
+    dataset = {item["id"]: item for item in dataset_items}
+    question_ids = {item["id"] for item in sample_questions(dataset_items, limit)}
+    return dataset, question_ids
+
+
+# --------------------------------------------------------------------------- #
+# mrdre feedback                                                              #
+# --------------------------------------------------------------------------- #
+
+def _add_feedback_parser(subparsers) -> None:
+    parser = subparsers.add_parser(
+        "feedback",
+        help="Simulate user feedback on a turn of reports",
+        description=(
+            "Write one simulated user feedback per report: content feedback on checklist items "
+            "the report missed, format feedback on its writing and presentation, or the fixed "
+            "reflection request. The feedback only goes into the output file; the next turn is "
+            "generated separately."
+        ),
+    )
+    parser.add_argument("--dataset", required=True, help=DATASET_HELP)
+    parser.add_argument("--reports", required=True, help="Reports JSONL file to give feedback on")
+    parser.add_argument("--feedback-type", required=True, choices=FEEDBACK_TYPES, help="Feedback type")
+    parser.add_argument("--out", required=True, help="Output feedback JSONL file")
+    parser.add_argument("--eval",
+                        help="Checklist scores of the reports, required for content feedback: an "
+                             "`mrdre evaluate` output directory or a checklist JSONL file")
+    parser.add_argument("--num-items", type=int, default=1,
+                        help="Missed checklist items per content feedback (default: 1)")
+    parser.add_argument("--refine", action="store_true",
+                        help="Rewrite each content or format feedback into a localized edit plan (uses gpt-4.1)")
+    parser.add_argument("--limit", type=int, default=-1, help=LIMIT_HELP)
+    parser.add_argument("--seed", type=int, default=42,
+                        help="Random seed for choosing checklist items and format examples, combined with "
+                             "each question ID so a report's feedback does not depend on the other reports "
+                             "(default: 42)")
+    parser.add_argument("--overwrite", action="store_true",
+                        help="Regenerate feedback for reports that already have feedback in --out")
+    parser.set_defaults(run=_run_feedback)
+
+
+def _run_feedback(args: argparse.Namespace) -> None:
+    if args.feedback_type == "content" and not args.eval:
+        raise SystemExit("mrdre feedback: content feedback needs the checklist scores of the reports (--eval)")
+    if args.refine and args.feedback_type == "reflection":
+        raise SystemExit("mrdre feedback: --refine applies to content and format feedback")
+    if args.num_items < 1:
+        raise SystemExit("mrdre feedback: --num-items must be at least 1")
+
+    dataset, question_ids = _load_dataset(args.dataset, args.limit)
+    reports = load_reports(args.reports, dataset, question_ids)
+
+    checklist_records = None
+    if args.feedback_type == "content":
+        eval_path = Path(args.eval)
+        if eval_path.is_dir():
+            changed = changed_reports(eval_path, reports)
+            if changed:
+                raise ValueError(f"{eval_path} holds scores of different reports (e.g. Q{', Q'.join(changed[:5])})")
+            eval_path = eval_path / "checklist.jsonl"
+        checklist_records = load_jsonl(str(eval_path))
+
+    # Resume: skip reports that already have feedback in the output file
+    out = Path(args.out)
+    existing = load_partial_jsonl(out)
+    report_ids = {str(report["id"]) for report in reports}
+    if args.overwrite and existing:
+        existing = [item for item in existing if str(item["id"]) not in report_ids]
+        save_jsonl(existing, str(out))
+    # A file holds one kind of feedback, since evaluation reads its type from the records
+    kind = _feedback_kind(args.feedback_type, args.refine, args.num_items)
+    other = next((item for item in existing if _feedback_kind(
+        item.get("feedback_type", args.feedback_type), "original_feedback" in item, len(item.get("item_id") or [])
+    ) != kind), None)
+    if other is not None:
+        raise ValueError(f"{out} holds other feedback than {kind} (e.g. Q{other['id']}); use a new --out or --overwrite")
+    done_ids = {str(item["id"]) for item in existing}
+    pending = [report for report in reports if str(report["id"]) not in done_ids]
+    if not pending:
+        logger.info(f"All {len(reports)} reports already have feedback in {out}")
+        return
+    if len(pending) < len(reports):
+        logger.info(f"Resuming: {len(reports) - len(pending)} reports already have feedback in {out}")
+
+    logger.info(f"Simulating {args.feedback_type} feedback on {len(pending)} reports from {args.reports}")
+    written = 0
+    for item in simulate_feedback(
+        pending, args.feedback_type, checklist_records, args.num_items, args.refine, args.seed
+    ):
+        append_jsonl(item, str(out))
+        written += 1
+    skipped = f" ({len(pending) - written} without feedback)" if written < len(pending) else ""
+    logger.info(f"✓ {written} feedback records → {out}{skipped}")
+
+
+def _feedback_kind(feedback_type: str, refined: bool, num_items: int) -> str:
+    """Describe a kind of feedback, e.g. "refined content feedback on 2 checklist items"."""
+    items = f" on {num_items} checklist item{'s' if num_items > 1 else ''}" if feedback_type == "content" else ""
+    return f"{'refined ' if refined else ''}{feedback_type} feedback{items}"
 
 
 # --------------------------------------------------------------------------- #
@@ -103,9 +218,7 @@ def _run_evaluate(args: argparse.Namespace) -> None:
     if args.previous_eval and Path(args.previous_eval).resolve() == out.resolve():
         raise SystemExit("mrdre evaluate: --previous-eval is the previous turn's output directory, not --out")
 
-    dataset_items = load_jsonl(str(resolve_dataset(args.dataset)))
-    dataset = {item["id"]: item for item in dataset_items}
-    question_ids = {item["id"] for item in sample_questions(dataset_items, args.limit)}
+    dataset, question_ids = _load_dataset(args.dataset, args.limit)
     reports = load_reports(args.reports, dataset, question_ids)
     modes = EVAL_MODES if args.mode == "all" else (args.mode,)
     if args.previous_eval:

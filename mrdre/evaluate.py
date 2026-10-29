@@ -24,7 +24,7 @@ from mrdre.dr_eval.eval_prompts import (
 )
 from mrdre.engine.dr_tulu import parse_and_format_citations
 from mrdre.engine.oai import GPT
-from mrdre.utils import append_jsonl, load_jsonl, save_jsonl
+from mrdre.utils import append_jsonl, load_jsonl, load_partial_jsonl, save_jsonl
 
 logger = logging.getLogger(__name__)
 
@@ -75,12 +75,17 @@ def load_reports(
     if question_ids is not None:
         reports = [report for report in reports if report["id"] in question_ids]
 
+    missing = []
     for report in reports:
-        if "full_response" not in report:
-            if "report" not in report:
-                raise ValueError(f"{report_file}: Q{report['id']} has neither 'report' nor 'full_response.report'")
+        if "full_response" not in report and "report" in report:
             report["full_response"] = {"report": report.pop("report")}
+        full_response = report.get("full_response")
+        if not isinstance(full_response, dict) or not isinstance(full_response.get("report"), str):
+            missing.append(report["id"])
         report.setdefault("question", dataset[report["id"]]["question"])
+    if missing:
+        raise ValueError(f"{report_file}: {len(missing)} records have no report text in 'report' or "
+                         f"'full_response.report', e.g. {missing[:5]}")
     return reports
 
 
@@ -110,7 +115,7 @@ def check_output_dir(output_dir: Path, reports: List[Dict[str, Any]], overwrite:
     for mode in EVAL_MODES if changed else ():
         score_file = output_dir / f"{mode}.jsonl"
         if score_file.exists():
-            kept = [record for record in _load_existing_records(score_file) if str(record.get("id")) not in changed]
+            kept = [record for record in load_partial_jsonl(score_file) if str(record.get("id")) not in changed]
             save_jsonl(kept, str(score_file))
 
     stored = _stored_reports(output_dir)
@@ -265,7 +270,7 @@ def evaluate_reports(
         report_ids = {report["id"] for report in reports}
         for mode in judges:
             output_file = output_dir / f"{mode}{file_suffix}.jsonl"
-            existing = [record for record in _load_existing_records(output_file) if record.get("id") in report_ids]
+            existing = [record for record in load_partial_jsonl(output_file) if record.get("id") in report_ids]
             _check_judge_models(
                 existing, judge_models[mode], output_file, "use the same judge model or a new output directory"
             )
@@ -290,7 +295,7 @@ def _evaluate_mode(
 ) -> List[Dict[str, Any]]:
     """Run one judge over the reports, resuming from the records already in output_file."""
     report_ids = {report["id"] for report in reports}
-    existing = _load_existing_records(output_file)
+    existing = load_partial_jsonl(output_file)
     if ignore_existing:
         # Drop the old records of these reports; records of other questions stay in the file
         if output_file.exists():
@@ -316,25 +321,6 @@ def _evaluate_mode(
         append_jsonl(record, str(output_file))
 
     logger.info(f"{mode.capitalize()} done → {output_file}")
-    return records
-
-
-def _load_existing_records(output_file: Path) -> List[Dict[str, Any]]:
-    """Load the records of an earlier run, dropping a line cut off by an interrupted write."""
-    if not output_file.exists():
-        return []
-    records, broken = [], 0
-    with open(output_file, "r", encoding="utf-8") as f:
-        for line in f:
-            if not line.strip():
-                continue
-            try:
-                records.append(json.loads(line))
-            except json.JSONDecodeError:
-                broken += 1
-    if broken:
-        logger.warning(f"Dropping {broken} unreadable lines from {output_file}")
-        save_jsonl(records, str(output_file))
     return records
 
 
