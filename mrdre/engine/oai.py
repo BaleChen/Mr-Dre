@@ -44,6 +44,7 @@ class OpenAIDeepResearchAgent(DeepResearchAgentBase):
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=5, min=5, max=60),
+        reraise=True,
     )
     def __call__(
         self,
@@ -208,6 +209,7 @@ class GPT:
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=5, min=5, max=60),
+        reraise=True,
     )
     def __call__(self, user_prompt: str) -> str:
         """

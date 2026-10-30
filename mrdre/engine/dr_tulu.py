@@ -159,6 +159,7 @@ class DrTuluDeepResearchAgent(DeepResearchAgentBase):
     @retry(
         stop=stop_after_attempt(5),
         wait=wait_exponential(multiplier=2, min=2, max=30),
+        reraise=True,
     )
     def __call__(self, input_data: PromptType, **kwargs) -> str:
         """Submit a new job to the DR-Tulu server and return its request_id."""

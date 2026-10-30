@@ -86,6 +86,7 @@ class SonarDeepResearchAgent(DeepResearchAgentBase):
     @retry(
         stop=stop_after_attempt(5),
         wait=wait_exponential(multiplier=5, min=5, max=60),
+        reraise=True,
     )
     def _submit_request(self, payload: dict) -> str:
         """Submit async request with retry logic."""
