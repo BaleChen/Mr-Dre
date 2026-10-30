@@ -282,7 +282,7 @@ def _add_evaluate_parser(subparsers) -> None:
     parser.add_argument("--limit", type=int, default=-1, help=LIMIT_HELP)
     parser.add_argument("--judge-model", default=DEFAULT_JUDGE_MODEL,
                         help=f"Judge model (default: {DEFAULT_JUDGE_MODEL}, as in the paper); "
-                             "webpage summaries always use gpt-4.1-nano")
+                             "web page summaries always use gpt-5.6-luna")
     parser.add_argument("--overwrite", action="store_true",
                         help="Re-evaluate reports that already have scores in --out")
     parser.set_defaults(run=_run_evaluate)

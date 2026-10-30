@@ -243,7 +243,7 @@ def summarize_url_content(
             summary = summarization_model(prompt)
             return (url, summary)
         except Exception as e:
-            logger.error(f"Summarization failed: {url[:50]}...")
+            logger.error(f"Summarization failed: {url[:50]}... ({e})")
             return (url, url_to_content[url])  # Return original on error
     
     url_to_summary = dict(url_to_content)  # Start with original content

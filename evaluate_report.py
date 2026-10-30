@@ -37,8 +37,8 @@ def main():
                         help="Model for claim extraction")
     parser.add_argument("--supported_judge_model", type=str, default="gpt-4.1-mini",
                         help="Model for judging claim support")
-    parser.add_argument("--webpage_summarization_model", type=str, default="gpt-4.1-nano",
-                        help="Model for summarizing webpage content (optional, e.g., gpt-4.1-nano)")
+    parser.add_argument("--webpage_summarization_model", type=str, default="gpt-5.6-luna",
+                        help="Model for summarizing webpage content (optional, e.g., gpt-5.6-luna)")
     parser.add_argument("--rubric_judge_model", type=str, default="gpt-4.1-mini",
                         help="Model for rubric evaluation")
     parser.add_argument("--ignore_existing", action="store_true",

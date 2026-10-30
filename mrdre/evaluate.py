@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 EVAL_MODES = ("checklist", "citation", "rubric")
 DEFAULT_JUDGE_MODEL = "gpt-4.1-mini"
-DEFAULT_SUMMARIZATION_MODEL = "gpt-4.1-nano"
+DEFAULT_SUMMARIZATION_MODEL = "gpt-5.6-luna"
 # The reports scored in each output directory of `mrdre evaluate`, as {"id", "full_response"}
 REPORTS_FILE = "scored_reports.jsonl"
 # Fields of the per-report records that name the judge models of each mode

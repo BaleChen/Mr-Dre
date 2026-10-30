@@ -1,5 +1,6 @@
 """OpenAI Deep Research Agent implementation."""
 
+import re
 import time
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -178,10 +179,13 @@ def _cached_gpt_call(model_name: str, system_prompt: str, user_prompt: str) -> s
     client = openai.OpenAI()
     messages = [{"role": "system", "content": system_prompt}]
     messages.append({"role": "user", "content": user_prompt})
+    # GPT-5.x models from GPT-5.1 on accept temperature only with reasoning effort "none"
+    options = {"reasoning": {"effort": "none"}} if re.match(r"gpt-5\.[1-9]", model_name) else {}
     response = client.responses.create(
         model=model_name,
         input=messages,
         temperature=0,
+        **options,
     )
     return response.output_text
 
