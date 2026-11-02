@@ -102,7 +102,6 @@ _PROVIDER_REGISTRY: List[Tuple[str, str, str, bool]] = [
     ("sonar-", "perplexity", "SonarDeepResearchAgent", True),
     ("odr-", "odr", "OpenDeepResearchAgent", True),
     ("dr-tulu", "dr_tulu", "DrTuluDeepResearchAgent", True),
-    ("tongyi", "tongyi", "TongyiDeepResearchAgent", True),
     # Add new providers here:
     # ("my-provider-", "my_module", "MyProviderAgent", True),
 ]
@@ -122,7 +121,6 @@ class DRA:
         - Perplexity: "sonar-*" (e.g., "sonar-deep-research")
         - Open Deep Research: "odr-*"
         - DR-Tulu: "dr-tulu*" (case-insensitive)
-        - Tongyi: "tongyi*" (case-insensitive)
     """
 
     def __init__(self, model_name: str, **kwargs):
