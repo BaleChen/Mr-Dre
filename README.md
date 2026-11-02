@@ -24,47 +24,48 @@ Human researchers rarely write a report in a single shot, as we iteratively draf
 - [News](#news)
 - [Setup](#setup)
 - [Data](#data)
-- [DRA Report Generation](#dra-report-generation)
-- [DRA Report Evaluation](#dra-report-evaluation)
-- [Release Progress](#release-progress)
+- [Quick Start](#quick-start)
 - [Contact Us](#contact-us)
 - [Citation](#citation)
 
 ## News
+[11/2026] 🛠️ We released the `mrdre` command-line tool: one command each for generating reports, simulating feedback, and evaluating reports and revisions. See the [Quick Start](#quick-start) and [CLI-guide.md](CLI-guide.md).
+
 [07/2026] 🏆 Our paper was accepted to ACL 2026 and received a **SAC Highlight Award**!
 
 [01/20/2026] Initial Code Release🎉
 
 ## Setup
 
-We recommend using [uv](https://github.com/astral-sh/uv) to quickly set up and manage your environment:
+Clone the repository and install it with [uv](https://github.com/astral-sh/uv):
 
 ```shell
-# Clone the repository
 git clone https://github.com/BaleChen/Mr-Dre.git
 cd Mr-Dre
-
-# Set up the environment
-uv sync
-
-# Activate the virtual environment
+uv sync --python 3.12
 source .venv/bin/activate
 ```
 
+Then define your API keys in a `.env` file in the directory where you run `mrdre`, using `.env.example` as a template:
 
-Then, set your API keys as environment variables by defining them in `.env`. You can use our provided `.env.example` as a reference. We require four API Keys: `OPENAI_API_KEY`, `PERPLEXITY_API_KEY`, `JINA_API_KEY`, and `SERPER_API_KEY`.
+| Key | Needed for |
+| --- | --- |
+| `OPENAI_API_KEY` | Evaluation judges, feedback simulation, and the OpenAI Deep Research engines |
+| `JINA_API_KEY` | Fetching webpage content from a URL |
+| `PERPLEXITY_API_KEY` | The Sonar Deep Research engine |
+| `SERPER_API_KEY` | Web search tool |
 
-> **Note:** Tongyi Deep Research, DR Tulu, and Open Deep Research require customized environment setup. We recommend isolating the server-side and client-side environments for best compatibility. See [`engine/README.md`](engine/README.md) for detailed instructions on setting up each DRA engine's server.
+OpenAI calls of the judges and of feedback simulation, and fetched web pages, are cached on disk for 30 days in `.cache/` at the root of the clone (set `MCP_CACHE_DIR` to use another folder), so rerunning an evaluation does not repeat these calls.
 
 ## Data
 
 We provide the three datasets used in our experiments in the `./data` folder:
 
 - [ResearchRubrics](https://scale.com/research/researchrubrics): `ResearchRubrics.jsonl`
-- [RigorousBench](https://github.com/evigbyen/rigorousbench): `RigorousBench.jsonl`
+- [RigorousBench](https://github.com/evigbyen/rigorousbench): `RigorousBench.jsonl` (now called Dr. Bench)
 - [ResearcherBench](https://github.com/GAIR-NLP/ResearcherBench): `ResearcherBench.jsonl`
 
-These JSONL files are preprocessed into a standardized format compatible with the report writing, revision, and evaluation pipelines in this repository.
+These JSONL files are preprocessed into a unified data format.
 
 <details>
 <summary>Dataset Sample Format</summary>
@@ -86,69 +87,64 @@ These JSONL files are preprocessed into a standardized format compatible with th
 
 </details>
 
-To bring your own dataset, ensure the questions have annotated *question-specific checklists* for report comprehensiveness evaluation. Process your dataset into a JSONL file following the format above and name it `YOUR_DATASET_NAME.jsonl`.
+To bring your own dataset, have each question annotated with a *question-specific checklist* for the comprehensiveness evaluation, write the questions to a JSONL file in the format above, and pass its path to `--dataset` in the `mrdre` CLI below.
 
-## DRA Report Generation
+> [!NOTE]
+> The latest version of our paper calls the question-specific checklist a *rubric*, in line with the literature; the two terms mean the same thing. The code and data keep the name `checklist`; the `rubric` evaluation mode below is the separate set of presentation rubrics.
 
-Use `generate_report.sh` to generate reports with supported DRAs. This script supports multi-turn report generation or revision with different feedback types.
+## Quick Start
 
-### Notes
-- The first turn is always generated with type `init`.
-- Generating turn *n* requires that turns 1 to *n-1* have already been generated.
-- Before applying `content_feedback` type to turn *n*, the model output for turn *n-1* must be evaluated (at least the checklist mode evaluation is done, since feedback generation relies on failed checklist criteria).
+Mr Dre has three main functions: evaluating reports, simulating user feedback, and generating or revising reports. Each is an `mrdre` command that reads and writes plain JSONL files with one record per question, so any stage can be replaced by your own code.
 
-### Basic Usage
+| Command | What it does |
+| --- | --- |
+| `mrdre evaluate` | Scores a file of reports; given the previous turn's evaluation and the feedback, also scores the revision |
+| `mrdre feedback` | Simulates one feedback message per report: content, format, or self-reflection |
+| `mrdre generate` | Generates or revises reports with a supported engine or your own Python function |
 
-Use the provided shell script for easier execution:
-
-```bash
-./scripts/generate_report.sh <dataset> <model> <turn> <type>
-```
-
-### Key Parameters
-The `generate_report.sh` script accepts the following parameters:
-- `<dataset>`: Dataset name (`ResearcherBench`, `RigorousBench`, `ResearchRubrics`) [required]
-- `<model>`: Model name (`dr-tulu`, `o4-mini-deep-research`, `o4-gpt4.1`, `sonar-deep-research`, `tongyi-deep-research`) [required]
-- `<turn>`: Turn number (starting from 1) [default: 1]
-- `<type>`: Turn type (`init`, `reflection`, `content_feedback`, `format_feedback`) [default: init]
-
-## DRA Report Evaluation
-
-Use `evaluate_report.sh` to evaluate generated Deep Research reports. It supports three evaluation modes: checklist, citation, and rubric. Note that the three modes correspond to our three evaluation dimensions defined in our paper: Comprehensiveness is measured by *checklist* coverage; Factuality uses *citation*-based metrics (citation faithfulness and claim groundedness); Presentation score relies on a fixed set of *rubrics* to evaluate.
-
-### Basic Usage
-
-Use the provided shell script for easier execution:
+One round of writing and revision on ResearcherBench:
 
 ```bash
-./scripts/evaluate_report.sh <report_file> <dataset_file> (<eval_mode> <num_questions>)
+# 1. Write the first turn of reports (or write runs/turn1.jsonl with your own agent)
+mrdre generate \
+    --dataset researcherbench \
+    --engine o4-mini-deep-research \
+    --out runs/turn1.jsonl
+
+# 2. Score the reports
+mrdre evaluate \
+    --dataset researcherbench \
+    --reports runs/turn1.jsonl \
+    --out runs/eval_turn1
+
+# 3. Simulate content feedback on the reports (uses the checklist scores from step 2)
+mrdre feedback \
+    --dataset researcherbench \
+    --reports runs/turn1.jsonl \
+    --feedback-type content \
+    --eval runs/eval_turn1 \
+    --out runs/feedback_turn2.jsonl
+
+# 4. Revise the reports according to the feedback
+mrdre generate \
+    --dataset researcherbench \
+    --engine o4-mini-deep-research \
+    --previous runs/turn1.jsonl \
+    --feedback runs/feedback_turn2.jsonl \
+    --out runs/turn2.jsonl
+
+# 5. Score the revised reports, and the revision against the scores from step 2
+mrdre evaluate \
+    --dataset researcherbench \
+    --reports runs/turn2.jsonl \
+    --previous-eval runs/eval_turn1 \
+    --feedback runs/feedback_turn2.jsonl \
+    --out runs/eval_turn2
 ```
 
-### Key Parameters
-The `evaluate_report.sh` script accepts the following parameters:
-- `<report_file>`: Path to generated report JSONL file [required]
-- `<dataset_file>`: Path to dataset JSONL file [required]
-- `<eval_mode>`: Optional. Evaluation mode (`all`, `checklist`, `citation`, `rubric`) [default: all]
-- `<num_questions>`: Optional. Number of questions to evaluate (-1 for all) [default: -1]
+For a third turn, repeat steps 3 to 5 on the second-turn reports and pass all earlier turns to `--previous`, oldest first.
 
-To compute the multi-turn revision metrics (Incorporation Rate, Break Rate, and score deltas) between two evaluated turns, run:
-
-```bash
-python evaluate_change.py <path/to/gen_turn{i}.jsonl> <path/to/gen_turn{j}.jsonl> [--format-feedback]
-```
-
-Pass `--format-feedback` when turn *j* received format feedback, so that the incorporation rate is judged by the pairwise LLM judge instead of the fix rate of targeted checklist items. Both files must be located in the output folders written by `generate_report.sh` (`output/<dataset>/<turn_type>/<model>/`) and must already be evaluated, since the script reads the evaluation results that `evaluate_report.sh` saves next to each file.
-
-## Release Progress
-
-- [x] Main evaluation protocol
-- [x] Setup quickstart
-- [x] Main engine and generation code
-- [x] Feedback simulation
-- [x] Datasets used in our paper
-- [x] Shell scripts for easy generation/evaluation
-- [ ] "How to Evaluate External DR Reports?" guide
-- [ ] "How to Add a New DRA Engine" guide
+See [CLI-guide.md](CLI-guide.md) for every command and option, including evaluating reports from your own agent, plugging in your own agent, and the revision metrics.
 
 ## Contact Us
 
@@ -156,17 +152,17 @@ If you have any questions, feel free to email me at `bale[dot]chen[at]nyu[dot]ed
 
 ## Citation
 
-If you find our work useful, please cite us:
+If you find our work useful, please cite the published version of our paper:
 
 ```bibtex
-@misc{chen2026singleshotwritingdeepresearch,
-      title={Beyond Single-shot Writing: Deep Research Agents are Unreliable at Multi-turn Report Revision}, 
-      author={Bingsen Chen and Boyan Li and Ping Nie and Yuyu Zhang and Xi Ye and Chen Zhao},
-      year={2026},
-      eprint={2601.13217},
-      archivePrefix={arXiv},
-      primaryClass={cs.CL},
-      url={https://arxiv.org/abs/2601.13217}, 
+@inproceedings{chen-etal-2026-beyond-single,
+    title = "Beyond Single-shot Writing: Deep Research Agents are Unreliable at Multi-turn Report Revision",
+    author = "Chen, Bingsen and Li, Boyan and Nie, Ping and Zhang, Yuyu and Ye, Xi and Zhao, Chen",
+    booktitle = "Proceedings of the 64th Annual Meeting of the {A}ssociation for {C}omputational {L}inguistics (Volume 1: Long Papers)",
+    year = "2026",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2026.acl-long.609/",
+    pages = "13325--13356"
 }
 ```
 
